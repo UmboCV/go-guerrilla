@@ -1,0 +1,21 @@
+name: Go
+on: [pull_request]
+pull_request:  # Specify a second event with pattern matching
+  paths:
+    - '*'
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: docker://golangci/golangci-lint:1.17
+        with:
+          args:
+            - golangci-lint
+            - run
+            - --deadline=30m
+            - --enable=misspell
+            - --enable=gosec
+            - --enable=gofmt
+            - --enable=goimports
+            - .
