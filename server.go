@@ -3,7 +3,6 @@ package guerrilla
 import (
 	"bytes"
 	"crypto/rand"
-	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
 	"fmt"
@@ -16,6 +15,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/flashmob/go-guerrilla/tls"
 	"github.com/flashmob/go-guerrilla/backends"
 	"github.com/flashmob/go-guerrilla/log"
 	"github.com/flashmob/go-guerrilla/mail"
@@ -643,6 +643,7 @@ func (s *server) handleClient(client *client) {
 				orgID, inputID, err := Authentication.Validate(loginInfo)
 				if err != nil {
 					client.sendResponse(r.FailAuthNotAccepted)
+					client.state = ClientCmd
 					break
 				}
 				loginInfo.status = true
