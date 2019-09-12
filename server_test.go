@@ -1,19 +1,18 @@
 package guerrilla
 
 import (
+	"errors"
 	"os"
 	"testing"
-
 	"bufio"
 	"net/textproto"
 	"strings"
 	"sync"
-
-	"crypto/tls"
 	"fmt"
 	"io/ioutil"
 	"net"
 
+	"github.com/flashmob/go-guerrilla/tls"
 	"github.com/flashmob/go-guerrilla/backends"
 	"github.com/flashmob/go-guerrilla/log"
 	"github.com/flashmob/go-guerrilla/mail"
@@ -616,11 +615,11 @@ func TestAuthenticationSuccess(t *testing.T) {
 		mainlog.WithError(logOpenError).Errorf("Failed creating a logger for mock conn [%s]", sc.ListenInterface)
 	}
 	conn, server := getMockServerConn(sc, t)
-	Authentication.AddValidator(func(u string, p string) (string, string, bool) {
+	Authentication.AddValidator(func(u string, p string) (string, string, error) {
 		if u == "helloworld" && p == "helloworld" {
-			return "000000", "aaaaaaaa", true
+			return "000000", "aaaaaaaa", nil
 		}
-		return "", "", false
+		return "", "", errors.New("fail to perform authentication")
 	})
 	// call the serve.handleClient() func in a goroutine.
 	client := NewClient(conn.Server, 1, mainlog, mail.NewPool(5))
@@ -690,7 +689,7 @@ func TestAuthenticationFailed(t *testing.T) {
 		mainlog.WithError(logOpenError).Errorf("Failed creating a logger for mock conn [%s]", sc.ListenInterface)
 	}
 	conn, server := getMockServerConn(sc, t)
-	Authentication.AddValidator(func(string, string) (string, string, bool) { return "", "", false })
+	Authentication.AddValidator(func(string, string) (string, string, error) { return "", "", errors.New("fail to perform authentication") })
 	// call the serve.handleClient() func in a goroutine.
 	client := NewClient(conn.Server, 1, mainlog, mail.NewPool(5))
 	var wg sync.WaitGroup
@@ -747,7 +746,7 @@ func TestCmdBeforeAuthentication(t *testing.T) {
 		mainlog.WithError(logOpenError).Errorf("Failed creating a logger for mock conn [%s]", sc.ListenInterface)
 	}
 	conn, server := getMockServerConn(sc, t)
-	Authentication.AddValidator(func(string, string) (string, string, bool) { return "", "", false })
+	Authentication.AddValidator(func(string, string) (string, string, error) { return "", "", nil })
 	// call the serve.handleClient() func in a goroutine.
 	client := NewClient(conn.Server, 1, mainlog, mail.NewPool(5))
 	var wg sync.WaitGroup
