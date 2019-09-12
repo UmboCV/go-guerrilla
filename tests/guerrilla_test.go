@@ -17,27 +17,21 @@ package test
 import (
 	"encoding/json"
 	"testing"
-
-	"github.com/flashmob/go-guerrilla/mail/rfc5321"
-
 	"time"
-
-	"github.com/flashmob/go-guerrilla"
-	"github.com/flashmob/go-guerrilla/backends"
-	"github.com/flashmob/go-guerrilla/log"
-
 	"bufio"
-
-	"crypto/tls"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"net"
 	"strings"
-
+	"errors"
 	"os"
 
 	"github.com/flashmob/go-guerrilla/tests/testcert"
+	"github.com/flashmob/go-guerrilla/mail/rfc5321"
+	"github.com/flashmob/go-guerrilla"
+	"github.com/flashmob/go-guerrilla/backends"
+	"github.com/flashmob/go-guerrilla/log"
+	"github.com/flashmob/go-guerrilla/tls"
 )
 
 type TestConfig struct {

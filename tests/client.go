@@ -2,12 +2,13 @@ package test
 
 import (
 	"bufio"
-	"crypto/tls"
 	"errors"
 	"fmt"
-	"github.com/flashmob/go-guerrilla"
 	"net"
 	"time"
+
+	"github.com/flashmob/go-guerrilla"
+	"github.com/flashmob/go-guerrilla/tls"
 )
 
 func Connect(serverConfig guerrilla.ServerConfig, deadline time.Duration) (net.Conn, *bufio.Reader, error) {
