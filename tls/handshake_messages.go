@@ -6,8 +6,9 @@ package tls
 
 import (
 	"fmt"
-	"internal/x/crypto/cryptobyte"
 	"strings"
+
+	"golang.org/x/crypto/cryptobyte"
 )
 
 // The marshalingFunction type is an adapter to allow the use of ordinary

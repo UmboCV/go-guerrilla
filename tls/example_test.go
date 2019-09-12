@@ -5,13 +5,14 @@
 package tls_test
 
 import (
-	"crypto/tls"
 	"crypto/x509"
 	"log"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"time"
+
+	"github.com/flashmob/go-guerrilla/tls"
 )
 
 // zeroSource is an io.Reader that returns an unlimited number of zero bytes.

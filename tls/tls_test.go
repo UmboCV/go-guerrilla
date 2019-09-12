@@ -10,13 +10,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"internal/testenv"
 	"io"
 	"io/ioutil"
 	"math"
 	"net"
 	"os"
 	"reflect"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -348,7 +348,7 @@ func TestTLSUniqueMatches(t *testing.T) {
 }
 
 func TestVerifyHostname(t *testing.T) {
-	testenv.MustHaveExternalNetwork(t)
+	MustHaveExternalNetwork(t)
 
 	c, err := Dial("tcp", "www.google.com:https", nil)
 	if err != nil {
@@ -376,7 +376,7 @@ func TestVerifyHostnameResumed(t *testing.T) {
 }
 
 func testVerifyHostnameResumed(t *testing.T, version uint16) {
-	testenv.MustHaveExternalNetwork(t)
+	MustHaveExternalNetwork(t)
 
 	config := &Config{
 		MaxVersion:         version,
@@ -754,6 +754,18 @@ func TestCloneNonFuncFields(t *testing.T) {
 
 	if !reflect.DeepEqual(&c1, c2) {
 		t.Errorf("clone failed to copy a field")
+	}
+}
+
+// MustHaveExternalNetwork checks that the current system can use
+// external (non-localhost) networks.
+// If not, MustHaveExternalNetwork calls t.Skip with an explanation.
+func MustHaveExternalNetwork(t testing.TB) {
+	if runtime.GOOS == "nacl" || runtime.GOOS == "js" {
+		t.Skipf("skipping test: no external network on %s", runtime.GOOS)
+	}
+	if testing.Short() {
+		t.Skipf("skipping test: no external network in -short mode")
 	}
 }
 
