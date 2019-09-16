@@ -7,11 +7,12 @@ import (
 	"sync"
 	"time"
 
+	"runtime/debug"
+	"strings"
+
 	"github.com/flashmob/go-guerrilla/log"
 	"github.com/flashmob/go-guerrilla/mail"
 	"github.com/flashmob/go-guerrilla/response"
-	"runtime/debug"
-	"strings"
 )
 
 var ErrProcessorNotFound error
@@ -21,6 +22,8 @@ var ErrProcessorNotFound error
 // via a channel. Shutting down via Shutdown() will stop all workers.
 // The rest of this program always talks to the backend via this gateway.
 type BackendGateway struct {
+	sync.Mutex
+
 	// channel for distributing envelopes to workers
 	conveyor chan *workerMsg
 
@@ -31,7 +34,6 @@ type BackendGateway struct {
 	validators   []Processor
 
 	// controls access to state
-	sync.Mutex
 	State    backendState
 	config   BackendConfig
 	gwConfig *GatewayConfig

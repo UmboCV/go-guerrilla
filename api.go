@@ -4,10 +4,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/flashmob/go-guerrilla/backends"
-	"github.com/flashmob/go-guerrilla/log"
 	"io/ioutil"
 	"time"
+
+	"github.com/flashmob/go-guerrilla/backends"
+	"github.com/flashmob/go-guerrilla/log"
 )
 
 // Daemon provides a convenient API when using go-guerrilla as a package in your Go project.
@@ -69,6 +70,11 @@ func (d *Daemon) Start() (err error) {
 	}
 	err = d.g.Start()
 	if err == nil {
+		if d.Logger != nil {
+			d.g.SetLogger(d.Logger)
+			d.Log().Infof("main log configured to customize logger")
+			return
+		}
 		if err := d.resetLogger(); err == nil {
 			d.Log().Infof("main log configured to %s", d.Config.LogFile)
 		}
@@ -188,6 +194,11 @@ func (d *Daemon) Unsubscribe(topic Event, handler interface{}) error {
 		return nil
 	}
 	return d.g.Unsubscribe(topic, handler)
+}
+
+// for add the validator function to validator
+func (d *Daemon) AddAuthenticationValidator(f ValidateCallbackFunc) {
+	Authentication.AddValidator(f)
 }
 
 // log returns a logger that implements our log.Logger interface.

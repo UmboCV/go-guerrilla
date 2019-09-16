@@ -4,16 +4,17 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
-	"github.com/flashmob/go-guerrilla/backends"
-	"github.com/flashmob/go-guerrilla/log"
-	"github.com/flashmob/go-guerrilla/mail"
-	"github.com/flashmob/go-guerrilla/response"
 	"io/ioutil"
 	"net"
 	"os"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/flashmob/go-guerrilla/backends"
+	"github.com/flashmob/go-guerrilla/log"
+	"github.com/flashmob/go-guerrilla/mail"
+	"github.com/flashmob/go-guerrilla/response"
 )
 
 // Test Starting smtp without setting up logger / backend
@@ -536,7 +537,7 @@ func TestPubSubAPI(t *testing.T) {
 	defer d.Shutdown()
 	// new config
 	cfg := AppConfig{
-		PidFile:      "tests/pidfilex.pid",
+		PidFile:      "tests/pidfile.pid",
 		LogFile:      "tests/testlog",
 		AllowedHosts: []string{"grr.la"},
 		BackendConfig: backends.BackendConfig{

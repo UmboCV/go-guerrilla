@@ -2,7 +2,7 @@
 
 package guerrilla
 
-import "crypto/tls"
+import "github.com/flashmob/go-guerrilla/tls"
 
 // add ciphers introduced since Go 1.8
 func init() {

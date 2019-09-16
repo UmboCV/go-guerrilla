@@ -3,13 +3,14 @@ package backends
 import (
 	"bytes"
 	"fmt"
-	"github.com/flashmob/go-guerrilla/log"
-	"github.com/flashmob/go-guerrilla/mail"
 	"reflect"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
+
+	"github.com/flashmob/go-guerrilla/log"
+	"github.com/flashmob/go-guerrilla/mail"
 )
 
 var (
@@ -36,7 +37,7 @@ type Backend interface {
 	// Process processes then saves the mail envelope
 	Process(*mail.Envelope) Result
 	// ValidateRcpt validates the last recipient that was pushed to the mail envelope
-	ValidateRcpt(e *mail.Envelope) RcptError
+	ValidateRcpt(*mail.Envelope) RcptError
 	// Initializes the backend, eg. creates folders, sets-up database connections
 	Initialize(BackendConfig) error
 	// Initializes the backend after it was Shutdown()

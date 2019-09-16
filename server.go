@@ -3,8 +3,8 @@ package guerrilla
 import (
 	"bytes"
 	"crypto/rand"
-	"crypto/tls"
 	"crypto/x509"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -15,6 +15,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/flashmob/go-guerrilla/tls"
 	"github.com/flashmob/go-guerrilla/backends"
 	"github.com/flashmob/go-guerrilla/log"
 	"github.com/flashmob/go-guerrilla/mail"
@@ -80,6 +81,7 @@ var (
 	cmdQUIT     command = []byte("QUIT")
 	cmdDATA     command = []byte("DATA")
 	cmdSTARTTLS command = []byte("STARTTLS")
+	cmdAuth     command = []byte("AUTH LOGIN")
 )
 
 func (c command) match(in []byte) bool {
@@ -318,6 +320,11 @@ func (s *server) allowsHost(host string) bool {
 	return false
 }
 
+// Verifies the client passed the auth if the auth required
+func (s *server) isAuthentication(authRequired bool, loginStatus bool) bool {
+	return !(authRequired) || loginStatus
+}
+
 const commandSuffix = "\r\n"
 
 // Reads from the client until a \n terminator is encountered,
@@ -365,6 +372,7 @@ func (s *server) handleClient(client *client) {
 
 	// Extended feature advertisements
 	messageSize := fmt.Sprintf("250-SIZE %d\r\n", sc.MaxSize)
+	advertiseAuth := "250-AUTH LOGIN\r\n"
 	pipelining := "250-PIPELINING\r\n"
 	advertiseTLS := "250-STARTTLS\r\n"
 	advertiseEnhancedStatusCodes := "250-ENHANCEDSTATUSCODES\r\n"
@@ -389,6 +397,10 @@ func (s *server) handleClient(client *client) {
 		advertiseTLS = ""
 	}
 	r := response.Canned
+	authCmd := cmdAuthUsername
+	loginInfo := &LoginInfo{
+		status: false,
+	}
 	for client.isAlive() {
 		switch client.state {
 		case ClientGreeting:
@@ -434,6 +446,7 @@ func (s *server) handleClient(client *client) {
 				client.resetTransaction()
 				client.sendResponse(ehlo,
 					messageSize,
+					advertiseAuth,
 					pipelining,
 					advertiseTLS,
 					advertiseEnhancedStatusCodes,
@@ -462,6 +475,10 @@ func (s *server) handleClient(client *client) {
 				}
 				client.sendResponse(r.SuccessMailCmd)
 			case cmdMAIL.match(cmd):
+				if !s.isAuthentication(sc.AuthenticationRequired, loginInfo.status) {
+					client.sendResponse(r.FailAuthRequired)
+					break
+				}
 				if client.isInTransaction() {
 					client.sendResponse(r.FailNestedMailCmd)
 					break
@@ -476,8 +493,11 @@ func (s *server) handleClient(client *client) {
 					client.MailFrom = mail.Address{}
 				}
 				client.sendResponse(r.SuccessMailCmd)
-
 			case cmdRCPT.match(cmd):
+				if !s.isAuthentication(sc.AuthenticationRequired, loginInfo.status) {
+					client.sendResponse(r.FailAuthRequired)
+					break
+				}
 				if len(client.RcptTo) > rfc5321.LimitRecipients {
 					client.sendResponse(r.ErrorTooManyRecipients)
 					break
@@ -516,6 +536,10 @@ func (s *server) handleClient(client *client) {
 				client.kill()
 
 			case cmdDATA.match(cmd):
+				if !s.isAuthentication(sc.AuthenticationRequired, loginInfo.status) {
+					client.sendResponse(r.FailAuthRequired)
+					break
+				}
 				if len(client.RcptTo) == 0 {
 					client.sendResponse(r.FailNoRecipientsDataCmd)
 					break
@@ -523,8 +547,16 @@ func (s *server) handleClient(client *client) {
 				client.sendResponse(r.SuccessDataCmd)
 				client.state = ClientData
 
-			case sc.TLS.StartTLSOn && cmdSTARTTLS.match(cmd):
+			case cmdAuth.match(cmd):
+				if loginInfo.status == true {
+					client.sendResponse(r.FailNoIdentityChangesPermitted)
+					break
+				}
+				// Status code and the base64 encoded "Username"
+				client.sendResponse("334 VXNlcm5hbWU6")
+				client.state = ClientAuth
 
+			case sc.TLS.StartTLSOn && cmdSTARTTLS.match(cmd):
 				client.sendResponse(r.SuccessStartTLSCmd)
 				client.state = ClientStartTLS
 			default:
@@ -573,6 +605,75 @@ func (s *server) handleClient(client *client) {
 				client.state = ClientShutdown
 			}
 			client.resetTransaction()
+
+		case ClientAuth:
+			var err error
+			switch {
+			// Read the username from client
+			case authCmd.match(cmdAuthUsername):
+				var username string
+				var bsUsername []byte
+				username, err = client.authReader.ReadLine()
+				if err != nil {
+					break
+				}
+				bsUsername, err = base64.StdEncoding.DecodeString(username)
+				loginInfo.username = string(bsUsername)
+				if err != nil {
+					break
+				}
+				// Status code and the base64 encoded Password
+				client.sendResponse("334 UGFzc3dvcmQ6")
+				authCmd = cmdAuthPassword
+			// Read the password from client
+			case authCmd.match(cmdAuthPassword):
+				var password string
+				var bsPassword []byte
+				password, err = client.authReader.ReadLine()
+				if err != nil {
+					break
+				}
+				bsPassword, err = base64.StdEncoding.DecodeString(password)
+				if err != nil {
+					break
+				}
+				loginInfo.password = string(bsPassword)
+
+				// Validate the username and password from validate function
+				orgID, inputID, err := Authentication.Validate(loginInfo)
+				if err != nil {
+					client.sendResponse(r.FailAuthNotAccepted)
+					client.state = ClientCmd
+					break
+				}
+				loginInfo.status = true
+				client.Values["orgID"] = orgID
+				client.Values["inputID"] = inputID
+				if loginInfo.status {
+					client.sendResponse(r.SuccessAuthentication)
+				}
+				// Reset the status of current command
+				authCmd = cmdAuthUsername
+				client.state = ClientCmd
+			}
+
+			if err == io.EOF {
+				s.log().WithError(err).Warnf("Client closed the connection: %s", client.RemoteIP)
+				return
+			} else if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+				s.log().WithError(err).Warnf("Timeout: %s", client.RemoteIP)
+				return
+			} else if err == LineLimitExceeded {
+				client.sendResponse(r.FailLineTooLong)
+				client.kill()
+			} else if err != nil {
+				s.log().WithError(err).Warnf("Read error: %s", client.RemoteIP)
+				client.kill()
+			}
+
+			if s.isShuttingDown() {
+				client.state = ClientShutdown
+			}
 
 		case ClientStartTLS:
 			if !client.TLS && sc.TLS.StartTLSOn {

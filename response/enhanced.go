@@ -121,23 +121,26 @@ var (
 type Responses struct {
 
 	// The 500's
-	FailLineTooLong              *Response
-	FailNestedMailCmd            *Response
-	FailNoSenderDataCmd          *Response
-	FailNoRecipientsDataCmd      *Response
-	FailUnrecognizedCmd          *Response
-	FailMaxUnrecognizedCmd       *Response
-	FailReadLimitExceededDataCmd *Response
-	FailMessageSizeExceeded      *Response
-	FailReadErrorDataCmd         *Response
-	FailPathTooLong              *Response
-	FailInvalidAddress           *Response
-	FailLocalPartTooLong         *Response
-	FailDomainTooLong            *Response
-	FailBackendNotRunning        *Response
-	FailBackendTransaction       *Response
-	FailBackendTimeout           *Response
-	FailRcptCmd                  *Response
+	FailLineTooLong                *Response
+	FailNestedMailCmd              *Response
+	FailNoSenderDataCmd            *Response
+	FailNoRecipientsDataCmd        *Response
+	FailUnrecognizedCmd            *Response
+	FailMaxUnrecognizedCmd         *Response
+	FailReadLimitExceededDataCmd   *Response
+	FailMessageSizeExceeded        *Response
+	FailReadErrorDataCmd           *Response
+	FailPathTooLong                *Response
+	FailInvalidAddress             *Response
+	FailLocalPartTooLong           *Response
+	FailDomainTooLong              *Response
+	FailBackendNotRunning          *Response
+	FailBackendTransaction         *Response
+	FailBackendTimeout             *Response
+	FailRcptCmd                    *Response
+	FailNoIdentityChangesPermitted *Response
+	FailAuthRequired               *Response
+	FailAuthNotAccepted            *Response
 
 	// The 400's
 	ErrorTooManyRecipients *Response
@@ -145,15 +148,16 @@ type Responses struct {
 	ErrorShutdown          *Response
 
 	// The 200's
-	SuccessMailCmd       *Response
-	SuccessRcptCmd       *Response
-	SuccessResetCmd      *Response
-	SuccessVerifyCmd     *Response
-	SuccessNoopCmd       *Response
-	SuccessQuitCmd       *Response
-	SuccessDataCmd       *Response
-	SuccessStartTLSCmd   *Response
-	SuccessMessageQueued *Response
+	SuccessMailCmd        *Response
+	SuccessRcptCmd        *Response
+	SuccessResetCmd       *Response
+	SuccessVerifyCmd      *Response
+	SuccessNoopCmd        *Response
+	SuccessQuitCmd        *Response
+	SuccessDataCmd        *Response
+	SuccessStartTLSCmd    *Response
+	SuccessMessageQueued  *Response
+	SuccessAuthentication *Response
 }
 
 // Called automatically during package load to build up the Responses struct
@@ -218,6 +222,13 @@ func init() {
 		BasicCode:    221,
 		Class:        ClassSuccess,
 		Comment:      "Bye",
+	}
+
+	Canned.SuccessAuthentication = &Response{
+		EnhancedCode: OtherOrUndefinedSecurityStatus,
+		BasicCode:    235,
+		Class:        ClassSuccess,
+		Comment:      "Authentication Succeeded",
 	}
 
 	Canned.FailNoSenderDataCmd = &Response{
@@ -351,6 +362,26 @@ func init() {
 		Comment:      "User unknown in local recipient table",
 	}
 
+	Canned.FailNoIdentityChangesPermitted = &Response{
+		EnhancedCode: OtherOrUndefinedSecurityStatus,
+		BasicCode:    503,
+		Class:        ClassPermanentFailure,
+		Comment:      "No identity changes permitted.",
+	}
+
+	Canned.FailAuthRequired = &Response{
+		EnhancedCode: InvalidCommand,
+		BasicCode:    530,
+		Class:        ClassPermanentFailure,
+		Comment:      "Authentication Required.",
+	}
+
+	Canned.FailAuthNotAccepted = &Response{
+		EnhancedCode: DeliveryNotAuthorized,
+		BasicCode:    535,
+		Class:        ClassPermanentFailure,
+		Comment:      "Username and Password not accepted.",
+	}
 }
 
 // DefaultMap contains defined default codes (RfC 3463)
@@ -395,6 +426,8 @@ const (
 	ConversionRequiredButNotSupported       = ".6.3"
 	ConversionWithLossPerformed             = ".6.4"
 	ConversionFailed                        = ".6.5"
+	OtherOrUndefinedSecurityStatus          = ".7.0"
+	DeliveryNotAuthorized                   = ".7.1"
 )
 
 var defaultTexts = struct {
@@ -404,6 +437,7 @@ var defaultTexts = struct {
 	EnhancedStatusCode{ClassSuccess, ".1.0"}:          "OK",
 	EnhancedStatusCode{ClassSuccess, ".1.5"}:          "OK",
 	EnhancedStatusCode{ClassSuccess, ".5.0"}:          "OK",
+	EnhancedStatusCode{ClassSuccess, ".7.0"}:          "OK",
 	EnhancedStatusCode{ClassTransientFailure, ".5.3"}: "Too many recipients",
 	EnhancedStatusCode{ClassTransientFailure, ".5.4"}: "Relay access denied",
 	EnhancedStatusCode{ClassPermanentFailure, ".5.1"}: "Invalid command",

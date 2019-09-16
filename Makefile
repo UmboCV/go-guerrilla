@@ -1,5 +1,5 @@
 GIT ?= git
-GO_VARS ?=
+GO_VARS ?= GO111MODULE=on
 GO ?= go
 COMMIT := $(shell $(GIT) rev-parse HEAD)
 VERSION ?= $(shell $(GIT) describe --tags ${COMMIT} 2> /dev/null || echo "$(COMMIT)")
@@ -16,16 +16,13 @@ help:
 clean:
 	rm -f guerrillad vendor
 
-vendor:
-	dep ensure
-
-guerrillad: vendor
+guerrillad:
 	$(GO_VARS) $(GO) build -o="guerrillad" -ldflags="$(LD_FLAGS)" $(ROOT)/cmd/guerrillad
 
-guerrilladrace: vendor
+guerrilladrace:
 	$(GO_VARS) $(GO) build -o="guerrillad" -race -ldflags="$(LD_FLAGS)" $(ROOT)/cmd/guerrillad
 
-test: vendor
+test:
 	$(GO_VARS) $(GO) test -v .
 	$(GO_VARS) $(GO) test -v ./tests
 	$(GO_VARS) $(GO) test -v ./cmd/guerrillad
@@ -33,7 +30,7 @@ test: vendor
 	$(GO_VARS) $(GO) test -v ./backends
 	$(GO_VARS) $(GO) test -v ./mail
 
-testrace: vendor
+testrace:
 	$(GO_VARS) $(GO) test -v . -race
 	$(GO_VARS) $(GO) test -v ./tests -race
 	$(GO_VARS) $(GO) test -v ./cmd/guerrillad -race
