@@ -3,7 +3,6 @@ package guerrilla
 import (
 	"bufio"
 	"bytes"
-	"crypto/tls"
 	"errors"
 	"fmt"
 	"net"
@@ -11,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/flashmob/go-guerrilla/tls"
 	"github.com/flashmob/go-guerrilla/log"
 	"github.com/flashmob/go-guerrilla/mail"
 	"github.com/flashmob/go-guerrilla/mail/rfc5321"
