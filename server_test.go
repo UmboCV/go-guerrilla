@@ -1,22 +1,22 @@
 package guerrilla
 
 import (
-	"errors"
-	"os"
-	"testing"
 	"bufio"
-	"net/textproto"
-	"strings"
-	"sync"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net"
+	"net/textproto"
+	"os"
+	"strings"
+	"sync"
+	"testing"
 
-	"github.com/flashmob/go-guerrilla/tls"
 	"github.com/flashmob/go-guerrilla/backends"
 	"github.com/flashmob/go-guerrilla/log"
 	"github.com/flashmob/go-guerrilla/mail"
 	"github.com/flashmob/go-guerrilla/mocks"
+	"github.com/flashmob/go-guerrilla/tls"
 )
 
 // getMockServerConfig gets a mock ServerConfig struct used for creating a new server
@@ -689,7 +689,9 @@ func TestAuthenticationFailed(t *testing.T) {
 		mainlog.WithError(logOpenError).Errorf("Failed creating a logger for mock conn [%s]", sc.ListenInterface)
 	}
 	conn, server := getMockServerConn(sc, t)
-	Authentication.AddValidator(func(string, string) (string, string, error) { return "", "", errors.New("fail to perform authentication") })
+	Authentication.AddValidator(func(string, string) (string, string, error) {
+		return "", "", errors.New("fail to perform authentication")
+	})
 	// call the serve.handleClient() func in a goroutine.
 	client := NewClient(conn.Server, 1, mainlog, mail.NewPool(5))
 	var wg sync.WaitGroup

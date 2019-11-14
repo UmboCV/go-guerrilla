@@ -15,22 +15,22 @@
 package test
 
 import (
-	"encoding/json"
-	"testing"
-	"time"
 	"bufio"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net"
-	"strings"
-	"errors"
 	"os"
+	"strings"
+	"testing"
+	"time"
 
-	"github.com/flashmob/go-guerrilla/tests/testcert"
-	"github.com/flashmob/go-guerrilla/mail/rfc5321"
 	"github.com/flashmob/go-guerrilla"
 	"github.com/flashmob/go-guerrilla/backends"
 	"github.com/flashmob/go-guerrilla/log"
+	"github.com/flashmob/go-guerrilla/mail/rfc5321"
+	"github.com/flashmob/go-guerrilla/tests/testcert"
 	"github.com/flashmob/go-guerrilla/tls"
 )
 

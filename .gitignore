@@ -1,4 +1,5 @@
 .idea
+tests/*log*
 goguerrilla.conf
 goguerrilla.conf.json
 /guerrillad
