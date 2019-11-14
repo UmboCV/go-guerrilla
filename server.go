@@ -552,11 +552,21 @@ func (s *server) handleClient(client *client) {
 				err = client.sendResponse(s.timeout.Load().(time.Duration), r.FailNoIdentityChangesPermitted)
 				break
 			}
-			l, err := s.handleAuth(client, r)
-			if err != nil {
-				break
+			cmds := strings.Split(string(input), " ")
+			if len(cmds) > 2 {
+				l, err := s.handleAuthWithUsername(client, cmds[2], r)
+				if err != nil {
+					err = client.sendResponse(s.timeout.Load().(time.Duration), r.FailAuthNotAccepted)
+					break
+				}
+				loginInfo = l
+			} else {
+				l, err := s.handleAuth(client, r)
+				if err != nil {
+					break
+				}
+				loginInfo = l
 			}
-			loginInfo = l
 		case sc.TLS.StartTLSOn && cmdSTARTTLS.match(cmd):
 			err = client.sendResponse(s.timeout.Load().(time.Duration), r.SuccessStartTLSCmd)
 			if err != nil {
@@ -662,6 +672,50 @@ func (s *server) handleAuth(client *client, r response.Responses) (loginInfo Log
 	if err != nil {
 		return LoginInfo{}, err
 	}
+	bsUsername, err := base64.StdEncoding.DecodeString(username)
+	if err != nil {
+		return LoginInfo{}, err
+	}
+	loginInfo.username = string(bsUsername)
+
+	// Send status code and the base64 encoded Password
+	err = client.sendResponse(s.timeout.Load().(time.Duration), "334 UGFzc3dvcmQ6")
+	if err != nil {
+		return LoginInfo{}, err
+	}
+
+	// Read the password from client
+	password, err := client.authReader.ReadLine()
+	if err != nil {
+		return LoginInfo{}, err
+	}
+	bsPassword, err := base64.StdEncoding.DecodeString(password)
+	if err != nil {
+		return LoginInfo{}, err
+	}
+	loginInfo.password = string(bsPassword)
+	// Validate the username and password from validate function
+	orgID, inputID, err := Authentication.Validate(&loginInfo)
+	if err != nil {
+		err = client.sendResponse(s.timeout.Load().(time.Duration), r.FailAuthNotAccepted)
+		return LoginInfo{}, err
+	}
+	loginInfo.status = true
+	client.Values["orgID"] = orgID
+	client.Values["inputID"] = inputID
+	err = client.sendResponse(s.timeout.Load().(time.Duration), r.SuccessAuthentication)
+	if err != nil {
+		return LoginInfo{}, err
+	}
+	return loginInfo, nil
+}
+
+func (s *server) handleAuthWithUsername(
+	client *client,
+	username string,
+	r response.Responses,
+) (loginInfo LoginInfo, err error) {
+	// Read the username from client
 	bsUsername, err := base64.StdEncoding.DecodeString(username)
 	if err != nil {
 		return LoginInfo{}, err
