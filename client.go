@@ -10,29 +10,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/flashmob/go-guerrilla/tls"
 	"github.com/flashmob/go-guerrilla/log"
 	"github.com/flashmob/go-guerrilla/mail"
 	"github.com/flashmob/go-guerrilla/mail/rfc5321"
 	"github.com/flashmob/go-guerrilla/response"
-)
-
-// ClientState indicates which part of the SMTP transaction a given client is in.
-type ClientState int
-
-const (
-	// The client has connected, and is awaiting our first response
-	ClientGreeting = iota
-	// We have responded to the client's connection and are awaiting a command
-	ClientCmd
-	// We have received the sender and recipient information
-	ClientData
-	// We have received the auth request
-	ClientAuth
-	// We have agreed with the client to secure the connection over TLS
-	ClientStartTLS
-	// Server will shutdown, client to shutdown on next command turn
-	ClientShutdown
+	"github.com/flashmob/go-guerrilla/tls"
 )
 
 type client struct {
@@ -44,7 +26,6 @@ type client struct {
 	authReader *textproto.Reader
 	// Number of errors encountered during session with this client
 	errors       int
-	state        ClientState
 	messagesSent int
 	// Response to be written to the client (for debugging)
 	response   bytes.Buffer
@@ -84,7 +65,7 @@ func NewClient(conn net.Conn, clientID uint64, logger log.Logger, envelope *mail
 
 // sendResponse adds a response to be written on the next turn
 // the response gets buffered
-func (c *client) sendResponse(r ...interface{}) {
+func (c *client) sendResponse(timeout time.Duration, r ...interface{}) error {
 	c.bufout.Reset(c.conn)
 	if c.log.IsDebug() {
 		// an additional buffer so that we can log the response in debug mode only
@@ -108,15 +89,20 @@ func (c *client) sendResponse(r ...interface{}) {
 		}
 		if c.log.IsDebug() {
 			c.response.WriteString(out)
+			c.log.Debugf("Writing response to client: \n%s", c.response.String())
 		}
 		if c.bufErr != nil {
-			return
+			return c.bufErr
 		}
 	}
 	_, c.bufErr = c.bufout.WriteString("\r\n")
 	if c.log.IsDebug() {
 		c.response.WriteString("\r\n")
 	}
+	if err := c.setTimeout(timeout); err != nil {
+		return err
+	}
+	return c.bufout.Flush()
 }
 
 // resetTransaction resets the SMTP transaction, ready for the next email (doesn't disconnect)
@@ -173,7 +159,6 @@ func (c *client) init(conn net.Conn, clientID uint64, ep *mail.Pool) {
 	c.bufout.Reset(conn)
 	c.bufin.Reset(conn)
 	// reset session data
-	c.state = 0
 	c.KilledAt = time.Time{}
 	c.ConnectedAt = time.Now()
 	c.ID = clientID

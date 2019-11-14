@@ -15,12 +15,12 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/flashmob/go-guerrilla/tls"
 	"github.com/flashmob/go-guerrilla/backends"
 	"github.com/flashmob/go-guerrilla/log"
 	"github.com/flashmob/go-guerrilla/mail"
 	"github.com/flashmob/go-guerrilla/mail/rfc5321"
 	"github.com/flashmob/go-guerrilla/response"
+	"github.com/flashmob/go-guerrilla/tls"
 )
 
 const (
@@ -343,14 +343,6 @@ func (s *server) readCommand(client *client) ([]byte, error) {
 	return bs[:len(bs)-1], err
 }
 
-// flushResponse a response to the client. Flushes the client.bufout buffer to the connection
-func (s *server) flushResponse(client *client) error {
-	if err := client.setTimeout(s.timeout.Load().(time.Duration)); err != nil {
-		return err
-	}
-	return client.bufout.Flush()
-}
-
 func (s *server) isShuttingDown() bool {
 	return s.clientPool.IsShuttingDown()
 }
@@ -397,322 +389,315 @@ func (s *server) handleClient(client *client) {
 		advertiseTLS = ""
 	}
 	r := response.Canned
-	authCmd := cmdAuthUsername
-	loginInfo := &LoginInfo{
+	loginInfo := LoginInfo{
 		status: false,
 	}
+	if client.isAlive() {
+		err := client.sendResponse(s.timeout.Load().(time.Duration), greeting)
+		if err != nil {
+			s.log().WithError(err).Debug("error with response")
+			return
+		}
+	}
+
 	for client.isAlive() {
-		switch client.state {
-		case ClientGreeting:
-			client.sendResponse(greeting)
-			client.state = ClientCmd
-		case ClientCmd:
-			client.bufin.setLimit(CommandLineMaxLength)
-			input, err := s.readCommand(client)
-			s.log().Debugf("Client sent: %s", input)
-			if err == io.EOF {
-				s.log().WithError(err).Warnf("Client closed the connection: %s", client.RemoteIP)
-				return
-			} else if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-				s.log().WithError(err).Warnf("Timeout: %s", client.RemoteIP)
-				return
-			} else if err == LineLimitExceeded {
-				client.sendResponse(r.FailLineTooLong)
-				client.kill()
-				break
-			} else if err != nil {
-				s.log().WithError(err).Warnf("Read error: %s", client.RemoteIP)
-				client.kill()
-				break
+		client.bufin.setLimit(CommandLineMaxLength)
+		input, err := s.readCommand(client)
+		s.log().Debugf("Client sent: %s", input)
+		if err == io.EOF {
+			s.log().WithError(err).Warnf("Client closed the connection: %s", client.RemoteIP)
+			return
+		} else if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+			s.log().WithError(err).Warnf("Timeout: %s", client.RemoteIP)
+			return
+		} else if err == LineLimitExceeded {
+			err := client.sendResponse(s.timeout.Load().(time.Duration), r.FailLineTooLong)
+			if err != nil {
+				s.log().WithError(err).Debug("error writing response")
 			}
-			if s.isShuttingDown() {
-				client.state = ClientShutdown
-				continue
-			}
+			client.kill()
+			return
+		} else if err != nil {
+			s.log().WithError(err).Warnf("Read error: %s", client.RemoteIP)
+			client.kill()
+			return
+		}
+		if s.isShuttingDown() {
+			s.handleShotdown(client, r)
+			return
+		}
 
-			cmdLen := len(input)
-			if cmdLen > CommandVerbMaxLength {
-				cmdLen = CommandVerbMaxLength
-			}
-			cmd := bytes.ToUpper(input[:cmdLen])
-			switch {
-			case cmdHELO.match(cmd):
-				client.Helo = string(bytes.Trim(input[4:], " "))
-				client.resetTransaction()
-				client.sendResponse(helo)
+		cmdLen := len(input)
+		if cmdLen > CommandVerbMaxLength {
+			cmdLen = CommandVerbMaxLength
+		}
+		cmd := bytes.ToUpper(input[:cmdLen])
 
-			case cmdEHLO.match(cmd):
-				client.Helo = string(bytes.Trim(input[4:], " "))
-				client.resetTransaction()
-				client.sendResponse(ehlo,
-					messageSize,
-					advertiseAuth,
-					pipelining,
-					advertiseTLS,
-					advertiseEnhancedStatusCodes,
-					help)
-
-			case cmdHELP.match(cmd):
-				quote := response.GetQuote()
-				client.sendResponse("214-OK\r\n", quote)
-
-			case sc.XClientOn && cmdXCLIENT.match(cmd):
-				if toks := bytes.Split(input[8:], []byte{' '}); len(toks) > 0 {
-					for i := range toks {
-						if vals := bytes.Split(toks[i], []byte{'='}); len(vals) == 2 {
-							if bytes.Compare(vals[1], []byte("[UNAVAILABLE]")) == 0 {
-								// skip
-								continue
-							}
-							if bytes.Compare(vals[0], []byte("ADDR")) == 0 {
-								client.RemoteIP = string(vals[1])
-							}
-							if bytes.Compare(vals[0], []byte("HELO")) == 0 {
-								client.Helo = string(vals[1])
-							}
+		switch {
+		case cmdHELO.match(cmd):
+			client.Helo = string(bytes.Trim(input[4:], " "))
+			client.resetTransaction()
+			err = client.sendResponse(s.timeout.Load().(time.Duration), helo)
+		case cmdEHLO.match(cmd):
+			client.Helo = string(bytes.Trim(input[4:], " "))
+			client.resetTransaction()
+			err = client.sendResponse(s.timeout.Load().(time.Duration), ehlo,
+				messageSize,
+				advertiseAuth,
+				pipelining,
+				advertiseTLS,
+				advertiseEnhancedStatusCodes,
+				help,
+			)
+		case cmdHELP.match(cmd):
+			quote := response.GetQuote()
+			err = client.sendResponse(s.timeout.Load().(time.Duration), "214-OK\r\n", quote)
+		case sc.XClientOn && cmdXCLIENT.match(cmd):
+			if toks := bytes.Split(input[8:], []byte{' '}); len(toks) > 0 {
+				for i := range toks {
+					if vals := bytes.Split(toks[i], []byte{'='}); len(vals) == 2 {
+						if bytes.Compare(vals[1], []byte("[UNAVAILABLE]")) == 0 {
+							// skip
+							continue
+						}
+						if bytes.Compare(vals[0], []byte("ADDR")) == 0 {
+							client.RemoteIP = string(vals[1])
+						}
+						if bytes.Compare(vals[0], []byte("HELO")) == 0 {
+							client.Helo = string(vals[1])
 						}
 					}
 				}
-				client.sendResponse(r.SuccessMailCmd)
-			case cmdMAIL.match(cmd):
-				if !s.isAuthentication(sc.AuthenticationRequired, loginInfo.status) {
-					client.sendResponse(r.FailAuthRequired)
-					break
-				}
-				if client.isInTransaction() {
-					client.sendResponse(r.FailNestedMailCmd)
-					break
-				}
-				client.MailFrom, err = client.parsePath([]byte(input[10:]), client.parser.MailFrom)
-				if err != nil {
-					s.log().WithError(err).Error("MAIL parse error", "["+string(input[10:])+"]")
-					client.sendResponse(err)
-					break
-				} else if client.parser.NullPath {
-					// bounce has empty from address
-					client.MailFrom = mail.Address{}
-				}
-				client.sendResponse(r.SuccessMailCmd)
-			case cmdRCPT.match(cmd):
-				if !s.isAuthentication(sc.AuthenticationRequired, loginInfo.status) {
-					client.sendResponse(r.FailAuthRequired)
-					break
-				}
-				if len(client.RcptTo) > rfc5321.LimitRecipients {
-					client.sendResponse(r.ErrorTooManyRecipients)
-					break
-				}
-				to, err := client.parsePath([]byte(input[8:]), client.parser.RcptTo)
-				if err != nil {
-					s.log().WithError(err).Error("RCPT parse error", "["+string(input[8:])+"]")
-					client.sendResponse(err.Error())
-					break
-				}
-				if !s.allowsHost(to.Host) {
-					client.sendResponse(r.ErrorRelayDenied, " ", to.Host)
-				} else {
-					client.PushRcpt(to)
-					rcptError := s.backend().ValidateRcpt(client.Envelope)
-					if rcptError != nil {
-						client.PopRcpt()
-						client.sendResponse(r.FailRcptCmd, " ", rcptError.Error())
-					} else {
-						client.sendResponse(r.SuccessRcptCmd)
-					}
-				}
-
-			case cmdRSET.match(cmd):
-				client.resetTransaction()
-				client.sendResponse(r.SuccessResetCmd)
-
-			case cmdVRFY.match(cmd):
-				client.sendResponse(r.SuccessVerifyCmd)
-
-			case cmdNOOP.match(cmd):
-				client.sendResponse(r.SuccessNoopCmd)
-
-			case cmdQUIT.match(cmd):
-				client.sendResponse(r.SuccessQuitCmd)
-				client.kill()
-
-			case cmdDATA.match(cmd):
-				if !s.isAuthentication(sc.AuthenticationRequired, loginInfo.status) {
-					client.sendResponse(r.FailAuthRequired)
-					break
-				}
-				if len(client.RcptTo) == 0 {
-					client.sendResponse(r.FailNoRecipientsDataCmd)
-					break
-				}
-				client.sendResponse(r.SuccessDataCmd)
-				client.state = ClientData
-
-			case cmdAuth.match(cmd):
-				if loginInfo.status == true {
-					client.sendResponse(r.FailNoIdentityChangesPermitted)
-					break
-				}
-				// Status code and the base64 encoded "Username"
-				client.sendResponse("334 VXNlcm5hbWU6")
-				client.state = ClientAuth
-
-			case sc.TLS.StartTLSOn && cmdSTARTTLS.match(cmd):
-				client.sendResponse(r.SuccessStartTLSCmd)
-				client.state = ClientStartTLS
-			default:
-				client.errors++
-				if client.errors >= MaxUnrecognizedCommands {
-					client.sendResponse(r.FailMaxUnrecognizedCmd)
-					client.kill()
-				} else {
-					client.sendResponse(r.FailUnrecognizedCmd)
-				}
 			}
-
-		case ClientData:
-
-			// intentionally placed the limit 1MB above so that reading does not return with an error
-			// if the client goes a little over. Anything above will err
-			client.bufin.setLimit(int64(sc.MaxSize) + 1024000) // This a hard limit.
-
-			n, err := client.Data.ReadFrom(client.smtpReader.DotReader())
-			if n > sc.MaxSize {
-				err = fmt.Errorf("maximum DATA size exceeded (%d)", sc.MaxSize)
-			}
-			if err != nil {
-				if err == LineLimitExceeded {
-					client.sendResponse(r.FailReadLimitExceededDataCmd, " ", LineLimitExceeded.Error())
-					client.kill()
-				} else if err == MessageSizeExceeded {
-					client.sendResponse(r.FailMessageSizeExceeded, " ", MessageSizeExceeded.Error())
-					client.kill()
-				} else {
-					client.sendResponse(r.FailReadErrorDataCmd, " ", err.Error())
-					client.kill()
-				}
-				s.log().WithError(err).Warn("Error reading data")
-				client.resetTransaction()
+			err = client.sendResponse(s.timeout.Load().(time.Duration), r.SuccessMailCmd)
+		case cmdMAIL.match(cmd):
+			if !s.isAuthentication(sc.AuthenticationRequired, loginInfo.status) {
+				err = client.sendResponse(s.timeout.Load().(time.Duration), r.FailAuthRequired)
 				break
 			}
-
-			res := s.backend().Process(client.Envelope)
-			if res.Code() < 300 {
-				client.messagesSent++
+			if client.isInTransaction() {
+				err = client.sendResponse(s.timeout.Load().(time.Duration), r.FailNestedMailCmd)
+				break
 			}
-			client.sendResponse(res)
-			client.state = ClientCmd
-			if s.isShuttingDown() {
-				client.state = ClientShutdown
+			client.MailFrom, err = client.parsePath([]byte(input[10:]), client.parser.MailFrom)
+			if err != nil {
+				s.log().WithError(err).Error("MAIL parse error", "["+string(input[10:])+"]")
+				err = client.sendResponse(s.timeout.Load().(time.Duration), err)
+				break
+			} else if client.parser.NullPath {
+				// bounce has empty from address
+				client.MailFrom = mail.Address{}
 			}
-			client.resetTransaction()
-
-		case ClientAuth:
-			var err error
-			switch {
-			// Read the username from client
-			case authCmd.match(cmdAuthUsername):
-				var username string
-				var bsUsername []byte
-				username, err = client.authReader.ReadLine()
-				if err != nil {
-					break
-				}
-				bsUsername, err = base64.StdEncoding.DecodeString(username)
-				loginInfo.username = string(bsUsername)
-				if err != nil {
-					break
-				}
-				// Status code and the base64 encoded Password
-				client.sendResponse("334 UGFzc3dvcmQ6")
-				authCmd = cmdAuthPassword
-			// Read the password from client
-			case authCmd.match(cmdAuthPassword):
-				var password string
-				var bsPassword []byte
-				password, err = client.authReader.ReadLine()
-				if err != nil {
-					break
-				}
-				bsPassword, err = base64.StdEncoding.DecodeString(password)
-				if err != nil {
-					break
-				}
-				loginInfo.password = string(bsPassword)
-
-				// Validate the username and password from validate function
-				orgID, inputID, err := Authentication.Validate(loginInfo)
-				if err != nil {
-					client.sendResponse(r.FailAuthNotAccepted)
-					client.state = ClientCmd
-					break
-				}
-				loginInfo.status = true
-				client.Values["orgID"] = orgID
-				client.Values["inputID"] = inputID
-				if loginInfo.status {
-					client.sendResponse(r.SuccessAuthentication)
-				}
-				// Reset the status of current command
-				authCmd = cmdAuthUsername
-				client.state = ClientCmd
+			err = client.sendResponse(s.timeout.Load().(time.Duration), r.SuccessMailCmd)
+		case cmdRCPT.match(cmd):
+			if !s.isAuthentication(sc.AuthenticationRequired, loginInfo.status) {
+				err = client.sendResponse(s.timeout.Load().(time.Duration), r.FailAuthRequired)
+				break
 			}
-
-			if err == io.EOF {
-				s.log().WithError(err).Warnf("Client closed the connection: %s", client.RemoteIP)
-				return
-			} else if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-				s.log().WithError(err).Warnf("Timeout: %s", client.RemoteIP)
-				return
-			} else if err == LineLimitExceeded {
-				client.sendResponse(r.FailLineTooLong)
-				client.kill()
-			} else if err != nil {
-				s.log().WithError(err).Warnf("Read error: %s", client.RemoteIP)
-				client.kill()
+			if len(client.RcptTo) > rfc5321.LimitRecipients {
+				err = client.sendResponse(s.timeout.Load().(time.Duration), r.ErrorTooManyRecipients)
+				break
 			}
-
-			if s.isShuttingDown() {
-				client.state = ClientShutdown
+			to, err := client.parsePath([]byte(input[8:]), client.parser.RcptTo)
+			if err != nil {
+				s.log().WithError(err).Error("RCPT parse error", "["+string(input[8:])+"]")
+				err = client.sendResponse(s.timeout.Load().(time.Duration), err.Error())
+				break
 			}
-
-		case ClientStartTLS:
-			if !client.TLS && sc.TLS.StartTLSOn {
-				tlsConfig, ok := s.tlsConfigStore.Load().(*tls.Config)
-				if !ok {
-					s.mainlog().Error("Failed to load *tls.Config")
-				} else if err := client.upgradeToTLS(tlsConfig); err == nil {
-					advertiseTLS = ""
-					client.resetTransaction()
+			if !s.allowsHost(to.Host) {
+				err = client.sendResponse(s.timeout.Load().(time.Duration), r.ErrorRelayDenied, " ", to.Host)
+			} else {
+				client.PushRcpt(to)
+				rcptError := s.backend().ValidateRcpt(client.Envelope)
+				if rcptError != nil {
+					client.PopRcpt()
+					err = client.sendResponse(s.timeout.Load().(time.Duration), r.FailRcptCmd, " ", rcptError.Error())
 				} else {
-					s.log().WithError(err).Warnf("[%s] Failed TLS handshake", client.RemoteIP)
-					// Don't disconnect, let the client decide if it wants to continue
+					err = client.sendResponse(s.timeout.Load().(time.Duration), r.SuccessRcptCmd)
 				}
 			}
-			// change to command state
-			client.state = ClientCmd
-		case ClientShutdown:
-			// shutdown state
-			client.sendResponse(r.ErrorShutdown)
+		case cmdRSET.match(cmd):
+			client.resetTransaction()
+			err = client.sendResponse(s.timeout.Load().(time.Duration), r.SuccessResetCmd)
+		case cmdVRFY.match(cmd):
+			err = client.sendResponse(s.timeout.Load().(time.Duration), r.SuccessVerifyCmd)
+		case cmdNOOP.match(cmd):
+			err = client.sendResponse(s.timeout.Load().(time.Duration), r.SuccessNoopCmd)
+		case cmdQUIT.match(cmd):
+			err = client.sendResponse(s.timeout.Load().(time.Duration), r.SuccessQuitCmd)
 			client.kill()
+		case cmdDATA.match(cmd):
+			if !s.isAuthentication(sc.AuthenticationRequired, loginInfo.status) {
+				err = client.sendResponse(s.timeout.Load().(time.Duration), r.FailAuthRequired)
+				if err != nil {
+					s.log().WithError(err).Debug("error writing response")
+					return
+				}
+				break
+			}
+			if len(client.RcptTo) == 0 {
+				err = client.sendResponse(s.timeout.Load().(time.Duration), r.FailNoRecipientsDataCmd)
+				break
+			}
+			err = client.sendResponse(s.timeout.Load().(time.Duration), r.SuccessDataCmd)
+			if err != nil {
+				break
+			}
+			err = s.handleData(client, sc, r)
+			if err != nil {
+				break
+			}
+		case cmdAuth.match(cmd):
+			if loginInfo.status == true {
+				err = client.sendResponse(s.timeout.Load().(time.Duration), r.FailNoIdentityChangesPermitted)
+				break
+			}
+			l, err := s.handleAuth(client, r)
+			if err != nil {
+				break
+			}
+			loginInfo = l
+		case sc.TLS.StartTLSOn && cmdSTARTTLS.match(cmd):
+			err = client.sendResponse(s.timeout.Load().(time.Duration), r.SuccessStartTLSCmd)
+			if err != nil {
+				return
+			}
+			if s.handleStartTLS(client, sc) {
+				advertiseTLS = ""
+			}
+		default:
+			client.errors++
+			if client.errors >= MaxUnrecognizedCommands {
+				err = client.sendResponse(s.timeout.Load().(time.Duration), r.FailMaxUnrecognizedCmd)
+				client.kill()
+			} else {
+				err = client.sendResponse(s.timeout.Load().(time.Duration), r.FailUnrecognizedCmd)
+			}
 		}
-
-		if client.bufErr != nil {
-			s.log().WithError(client.bufErr).Debug("client could not buffer a response")
+		if err != nil {
+			s.log().WithError(err).Debug("error with response")
 			return
 		}
-		// flush the response buffer
-		if client.bufout.Buffered() > 0 {
-			if s.log().IsDebug() {
-				s.log().Debugf("Writing response to client: \n%s", client.response.String())
-			}
-			err := s.flushResponse(client)
-			if err != nil {
-				s.log().WithError(err).Debug("error writing response")
-				return
-			}
-		}
-
 	}
+}
+
+func (s *server) handleStartTLS(client *client, sc ServerConfig) (successful bool) {
+	if !client.TLS && sc.TLS.StartTLSOn {
+		tlsConfig, ok := s.tlsConfigStore.Load().(*tls.Config)
+		if !ok {
+			s.mainlog().Error("Failed to load *tls.Config")
+		} else if err := client.upgradeToTLS(tlsConfig); err == nil {
+			client.resetTransaction()
+		} else {
+			s.log().WithError(err).Warnf("[%s] Failed TLS handshake", client.RemoteIP)
+			// Don't disconnect, let the client decide if it wants to continue
+		}
+	}
+	return
+}
+
+func (s *server) handleShotdown(client *client, r response.Responses) {
+	if err := client.sendResponse(s.timeout.Load().(time.Duration), r.ErrorShutdown); err != nil {
+		s.log().WithError(err).Debug("error writing response")
+		return
+	}
+	client.kill()
+}
+
+func (s *server) handleData(client *client, sc ServerConfig, r response.Responses) (err error) {
+	// intentionally placed the limit 1MB above so that reading does not return with an error
+	// if the client goes a little over. Anything above will err
+	client.bufin.setLimit(int64(sc.MaxSize) + 1024000) // This a hard limit.
+
+	n, err := client.Data.ReadFrom(client.smtpReader.DotReader())
+	if n > sc.MaxSize {
+		err = fmt.Errorf("maximum DATA size exceeded (%d)", sc.MaxSize)
+	}
+	if err != nil {
+		if err == LineLimitExceeded {
+			err = client.sendResponse(
+				s.timeout.Load().(time.Duration),
+				r.FailReadLimitExceededDataCmd, " ",
+				LineLimitExceeded.Error())
+			client.kill()
+		} else if err == MessageSizeExceeded {
+			err = client.sendResponse(
+				s.timeout.Load().(time.Duration),
+				r.FailMessageSizeExceeded, " ",
+				MessageSizeExceeded.Error())
+			client.kill()
+		} else {
+			err = client.sendResponse(s.timeout.Load().(time.Duration), r.FailReadErrorDataCmd, " ", err.Error())
+			client.kill()
+		}
+		s.log().WithError(err).Warn("Error reading data")
+		client.resetTransaction()
+		return
+	}
+
+	res := s.backend().Process(client.Envelope)
+	if res.Code() < 300 {
+		client.messagesSent++
+	}
+	err = client.sendResponse(s.timeout.Load().(time.Duration), res)
+	if err != nil {
+		return
+	}
+	if s.isShuttingDown() {
+		s.handleShotdown(client, r)
+	}
+	client.resetTransaction()
+	return
+}
+
+func (s *server) handleAuth(client *client, r response.Responses) (loginInfo LoginInfo, err error) {
+	// Send status code and base64 encode Username:
+	err = client.sendResponse(s.timeout.Load().(time.Duration), "334 VXNlcm5hbWU6")
+	if err != nil {
+		return LoginInfo{}, err
+	}
+
+	// Read the username from client
+	username, err := client.authReader.ReadLine()
+	if err != nil {
+		return LoginInfo{}, err
+	}
+	bsUsername, err := base64.StdEncoding.DecodeString(username)
+	if err != nil {
+		return LoginInfo{}, err
+	}
+	loginInfo.username = string(bsUsername)
+
+	// Send status code and the base64 encoded Password
+	err = client.sendResponse(s.timeout.Load().(time.Duration), "334 UGFzc3dvcmQ6")
+	if err != nil {
+		return LoginInfo{}, err
+	}
+
+	// Read the password from client
+	password, err := client.authReader.ReadLine()
+	if err != nil {
+		return LoginInfo{}, err
+	}
+	bsPassword, err := base64.StdEncoding.DecodeString(password)
+	if err != nil {
+		return LoginInfo{}, err
+	}
+	loginInfo.password = string(bsPassword)
+	// Validate the username and password from validate function
+	orgID, inputID, err := Authentication.Validate(&loginInfo)
+	if err != nil {
+		err = client.sendResponse(s.timeout.Load().(time.Duration), r.FailAuthNotAccepted)
+		return LoginInfo{}, err
+	}
+	loginInfo.status = true
+	client.Values["orgID"] = orgID
+	client.Values["inputID"] = inputID
+	err = client.sendResponse(s.timeout.Load().(time.Duration), r.SuccessAuthentication)
+	if err != nil {
+		return LoginInfo{}, err
+	}
+	return loginInfo, nil
 }
 
 func (s *server) log() log.Logger {

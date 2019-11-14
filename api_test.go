@@ -700,7 +700,8 @@ func TestCustomBackendResult(t *testing.T) {
 		t.Error("could not read logfile")
 		return
 	}
-	// lets check for fingerprints
+
+	//lets check for fingerprints
 	if strings.Index(string(b), "451 4.3.0 Error") < 0 {
 		t.Error("did not log: 451 4.3.0 Error")
 	}
