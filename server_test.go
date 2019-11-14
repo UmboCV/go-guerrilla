@@ -737,6 +737,69 @@ func TestAuthenticationFailed(t *testing.T) {
 	wg.Wait()
 }
 
+func TestAuthenticationWithUsername(t *testing.T) {
+	var mainlog log.Logger
+	var logOpenError error
+	defer cleanTestArtifacts(t)
+	sc := getMockServerConfigAuthRequired()
+	mainlog, logOpenError = log.GetLogger(sc.LogFile, "debug")
+	if logOpenError != nil {
+		mainlog.WithError(logOpenError).Errorf("Failed creating a logger for mock conn [%s]", sc.ListenInterface)
+	}
+	conn, server := getMockServerConn(sc, t)
+	Authentication.AddValidator(func(u string, p string) (string, string, error) {
+		if u == "helloworld" && p == "helloworld" {
+			return "000000", "aaaaaaaa", nil
+		}
+		return "", "", errors.New("fail to perform authentication")
+	})
+	// call the serve.handleClient() func in a goroutine.
+	client := NewClient(conn.Server, 1, mainlog, mail.NewPool(5))
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		server.handleClient(client)
+		wg.Done()
+	}()
+	// Wait for the greeting from the server
+	r := textproto.NewReader(bufio.NewReader(conn.Client))
+	r.ReadLine()
+	w := textproto.NewWriter(bufio.NewWriter(conn.Client))
+
+	if err := w.PrintfLine("HELO test.test.com"); err != nil {
+		t.Error(err)
+	}
+
+	line, _ := r.ReadLine()
+
+	if err := w.PrintfLine("AUTH LOGIN aGVsbG93b3JsZA=="); err != nil {
+		t.Error(err)
+	}
+
+	expect := "334 UGFzc3dvcmQ6"
+	line, _ = r.ReadLine()
+	if strings.Compare(line, expect) != 0 {
+		t.Error("expected:", expect, "but got:", line)
+	}
+
+	if err := w.PrintfLine("aGVsbG93b3JsZA=="); err != nil {
+		t.Error(err)
+	}
+
+	line, _ = r.ReadLine()
+	expect = "235 2.7.0 Authentication Succeeded"
+	if strings.Compare(line, expect) != 0 {
+		t.Error("expected:", expect, "but got:", line)
+	}
+
+	if err := w.PrintfLine("QUIT"); err != nil {
+		t.Error(err)
+	}
+	r.ReadLine()
+
+	wg.Wait() // wait for handleClient to exit
+}
+
 // The auth required command should be able to block the commands
 func TestCmdBeforeAuthentication(t *testing.T) {
 	var mainlog log.Logger
