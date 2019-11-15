@@ -365,6 +365,9 @@ func (s *server) handleClient(client *client) {
 	// Extended feature advertisements
 	messageSize := fmt.Sprintf("250-SIZE %d\r\n", sc.MaxSize)
 	advertiseAuth := "250-AUTH LOGIN\r\n"
+	if !sc.AuthenticationRequired {
+		advertiseAuth = ""
+	}
 	pipelining := "250-PIPELINING\r\n"
 	advertiseTLS := "250-STARTTLS\r\n"
 	advertiseEnhancedStatusCodes := "250-ENHANCEDSTATUSCODES\r\n"
@@ -548,6 +551,10 @@ func (s *server) handleClient(client *client) {
 				break
 			}
 		case cmdAuth.match(cmd):
+			if !sc.AuthenticationRequired {
+				err = client.sendResponse(s.timeout.Load().(time.Duration), r.FailUnrecognizedCmd)
+				break
+			}
 			if loginInfo.status == true {
 				err = client.sendResponse(s.timeout.Load().(time.Duration), r.FailNoIdentityChangesPermitted)
 				break
