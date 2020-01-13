@@ -19,8 +19,10 @@ import (
 	"github.com/flashmob/go-guerrilla/tls"
 )
 
+type serverConfigOpt func(cfg *ServerConfig)
+
 // getMockServerConfig gets a mock ServerConfig struct used for creating a new server
-func getMockServerConfig() *ServerConfig {
+func getMockServerConfig(cfgs...serverConfigOpt) *ServerConfig {
 	sc := &ServerConfig{
 		IsEnabled:       true, // not tested here
 		Hostname:        "saggydimes.test.com",
@@ -30,21 +32,16 @@ func getMockServerConfig() *ServerConfig {
 		MaxClients:      30, // not tested here
 		LogFile:         "./tests/testlog",
 	}
+	for _, fn := range cfgs {
+		fn(sc)
+	}
 	return sc
 }
 
-func getMockServerConfigAuthRequired() *ServerConfig {
-	sc := &ServerConfig{
-		IsEnabled:              true, // not tested here
-		Hostname:               "saggydimes.test.com",
-		MaxSize:                1024, // smtp message max size
-		AuthenticationRequired: true,
-		Timeout:                5,
-		ListenInterface:        "127.0.0.1:2529",
-		MaxClients:             30, // not tested here
-		LogFile:                "./tests/testlog",
+func authenticationConfig(required bool) serverConfigOpt {
+	return func(cfg *ServerConfig) {
+		cfg.AuthenticationRequired = required
 	}
-	return sc
 }
 
 // getMockServerConn gets a new server using sc. Server will be using a mocked TCP connection
@@ -604,78 +601,88 @@ func TestAllowsHosts(t *testing.T) {
 
 }
 
-// The Authentication Success sholud return the success code
+// The Authentication Success should return the success code
 func TestAuthenticationSuccess(t *testing.T) {
 	var mainlog log.Logger
 	var logOpenError error
 	defer cleanTestArtifacts(t)
-	sc := getMockServerConfigAuthRequired()
-	mainlog, logOpenError = log.GetLogger(sc.LogFile, "debug")
-	if logOpenError != nil {
-		mainlog.WithError(logOpenError).Errorf("Failed creating a logger for mock conn [%s]", sc.ListenInterface)
-	}
-	conn, server := getMockServerConn(sc, t)
-	Authentication.AddValidator(func(u string, p string) (string, string, error) {
-		if u == "helloworld" && p == "helloworld" {
-			return "000000", "aaaaaaaa", nil
+
+	testWithAuth := func(authRequired bool) {
+		sc := getMockServerConfig(authenticationConfig(authRequired))
+		mainlog, logOpenError = log.GetLogger(sc.LogFile, "debug")
+		if logOpenError != nil {
+			mainlog.WithError(logOpenError).Errorf("Failed creating a logger for mock conn [%s]", sc.ListenInterface)
 		}
-		return "", "", errors.New("fail to perform authentication")
+		conn, server := getMockServerConn(sc, t)
+		Authentication.AddValidator(func(u string, p string) (string, string, error) {
+			if u == "helloworld" && p == "helloworld" {
+				return "000000", "aaaaaaaa", nil
+			}
+			return "", "", errors.New("fail to perform authentication")
+		})
+		// call the serve.handleClient() func in a goroutine.
+		client := NewClient(conn.Server, 1, mainlog, mail.NewPool(5))
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go func() {
+			server.handleClient(client)
+			wg.Done()
+		}()
+		// Wait for the greeting from the server
+		r := textproto.NewReader(bufio.NewReader(conn.Client))
+		r.ReadLine()
+		w := textproto.NewWriter(bufio.NewWriter(conn.Client))
+
+		if err := w.PrintfLine("HELO test.test.com"); err != nil {
+			t.Error(err)
+		}
+
+		line, _ := r.ReadLine()
+
+		if err := w.PrintfLine("AUTH LOGIN"); err != nil {
+			t.Error(err)
+		}
+
+		expect := "334 VXNlcm5hbWU6"
+		line, _ = r.ReadLine()
+		if strings.Compare(line, expect) != 0 {
+			t.Error("expected:", expect, "but got:", line)
+		}
+
+		if err := w.PrintfLine("aGVsbG93b3JsZA=="); err != nil {
+			t.Error(err)
+		}
+
+		expect = "334 UGFzc3dvcmQ6"
+		line, _ = r.ReadLine()
+		if strings.Compare(line, expect) != 0 {
+			t.Error("expected:", expect, "but got:", line)
+		}
+
+		if err := w.PrintfLine("aGVsbG93b3JsZA=="); err != nil {
+			t.Error(err)
+		}
+
+		line, _ = r.ReadLine()
+		expect = "235 2.7.0 Authentication Succeeded"
+		if strings.Compare(line, expect) != 0 {
+			t.Error("expected:", expect, "but got:", line)
+		}
+
+		if err := w.PrintfLine("QUIT"); err != nil {
+			t.Error(err)
+		}
+		r.ReadLine()
+
+		wg.Wait() // wait for handleClient to exit
+	}
+
+	t.Run("AuthenticationRequired is true", func(t *testing.T) {
+		testWithAuth(true)
 	})
-	// call the serve.handleClient() func in a goroutine.
-	client := NewClient(conn.Server, 1, mainlog, mail.NewPool(5))
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		server.handleClient(client)
-		wg.Done()
-	}()
-	// Wait for the greeting from the server
-	r := textproto.NewReader(bufio.NewReader(conn.Client))
-	r.ReadLine()
-	w := textproto.NewWriter(bufio.NewWriter(conn.Client))
-
-	if err := w.PrintfLine("HELO test.test.com"); err != nil {
-		t.Error(err)
-	}
-
-	line, _ := r.ReadLine()
-
-	if err := w.PrintfLine("AUTH LOGIN"); err != nil {
-		t.Error(err)
-	}
-
-	expect := "334 VXNlcm5hbWU6"
-	line, _ = r.ReadLine()
-	if strings.Compare(line, expect) != 0 {
-		t.Error("expected:", expect, "but got:", line)
-	}
-
-	if err := w.PrintfLine("aGVsbG93b3JsZA=="); err != nil {
-		t.Error(err)
-	}
-
-	expect = "334 UGFzc3dvcmQ6"
-	line, _ = r.ReadLine()
-	if strings.Compare(line, expect) != 0 {
-		t.Error("expected:", expect, "but got:", line)
-	}
-
-	if err := w.PrintfLine("aGVsbG93b3JsZA=="); err != nil {
-		t.Error(err)
-	}
-
-	line, _ = r.ReadLine()
-	expect = "235 2.7.0 Authentication Succeeded"
-	if strings.Compare(line, expect) != 0 {
-		t.Error("expected:", expect, "but got:", line)
-	}
-
-	if err := w.PrintfLine("QUIT"); err != nil {
-		t.Error(err)
-	}
-	r.ReadLine()
-
-	wg.Wait() // wait for handleClient to exit
+	t.Run("AuthenticationRequired is false", func(t *testing.T) {
+		testWithAuth(false)
+	})
 }
 
 // The Authentication Success sholud return the failed code
@@ -683,7 +690,7 @@ func TestAuthenticationFailed(t *testing.T) {
 	var mainlog log.Logger
 	var logOpenError error
 	defer cleanTestArtifacts(t)
-	sc := getMockServerConfigAuthRequired()
+	sc := getMockServerConfig(authenticationConfig(true))
 	mainlog, logOpenError = log.GetLogger(sc.LogFile, "debug")
 	if logOpenError != nil {
 		mainlog.WithError(logOpenError).Errorf("Failed creating a logger for mock conn [%s]", sc.ListenInterface)
@@ -741,7 +748,7 @@ func TestAuthenticationWithUsername(t *testing.T) {
 	var mainlog log.Logger
 	var logOpenError error
 	defer cleanTestArtifacts(t)
-	sc := getMockServerConfigAuthRequired()
+	sc := getMockServerConfig(authenticationConfig(true))
 	mainlog, logOpenError = log.GetLogger(sc.LogFile, "debug")
 	if logOpenError != nil {
 		mainlog.WithError(logOpenError).Errorf("Failed creating a logger for mock conn [%s]", sc.ListenInterface)
@@ -805,7 +812,7 @@ func TestCmdBeforeAuthentication(t *testing.T) {
 	var mainlog log.Logger
 	var logOpenError error
 	defer cleanTestArtifacts(t)
-	sc := getMockServerConfigAuthRequired()
+	sc := getMockServerConfig(authenticationConfig(true))
 	mainlog, logOpenError = log.GetLogger(sc.LogFile, "debug")
 	if logOpenError != nil {
 		mainlog.WithError(logOpenError).Errorf("Failed creating a logger for mock conn [%s]", sc.ListenInterface)
