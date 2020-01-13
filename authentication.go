@@ -26,11 +26,17 @@ type LoginInfo struct {
 type ValidateCallbackFunc func(username string, password string) (orgID string, intputID string, err error)
 
 var (
-	Authentication = &AuthenticationValidator{}
+	Authentication = &AuthenticationValidator{
+		handleFunctions: DefaultValidator,
+	}
 )
 
 type AuthenticationValidator struct {
 	handleFunctions ValidateCallbackFunc
+}
+
+func DefaultValidator(username string, password string) (orgID string, intputID string, err error) {
+	return "", "", nil
 }
 
 func (v *AuthenticationValidator) AddValidator(f ValidateCallbackFunc) {
