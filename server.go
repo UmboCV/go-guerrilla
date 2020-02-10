@@ -695,14 +695,17 @@ func (s *server) handleAuth(client *client, r response.Responses) (loginInfo Log
 	}
 	loginInfo.password = string(bsPassword)
 	// Validate the username and password from validate function
-	orgID, inputID, err := Authentication.Validate(&loginInfo)
+	values, err := Authentication.Validate(&loginInfo)
 	if err != nil {
 		err = client.sendResponse(s.timeout.Load().(time.Duration), r.FailAuthNotAccepted)
 		return LoginInfo{}, err
 	}
+	for key, v := range values {
+		if key != "" && v != nil {
+			client.Values[key] = v
+		}
+	}
 	loginInfo.status = true
-	client.Values["orgID"] = orgID
-	client.Values["inputID"] = inputID
 	err = client.sendResponse(s.timeout.Load().(time.Duration), r.SuccessAuthentication)
 	if err != nil {
 		return LoginInfo{}, err
@@ -739,14 +742,19 @@ func (s *server) handleAuthWithUsername(
 	}
 	loginInfo.password = string(bsPassword)
 	// Validate the username and password from validate function
-	orgID, inputID, err := Authentication.Validate(&loginInfo)
+	values, err := Authentication.Validate(&loginInfo)
 	if err != nil {
 		err = client.sendResponse(s.timeout.Load().(time.Duration), r.FailAuthNotAccepted)
 		return LoginInfo{}, err
 	}
+
+	for key, v := range values {
+		if key != "" && v != nil {
+			client.Values[key] = v
+		}
+	}
 	loginInfo.status = true
-	client.Values["orgID"] = orgID
-	client.Values["inputID"] = inputID
+
 	err = client.sendResponse(s.timeout.Load().(time.Duration), r.SuccessAuthentication)
 	if err != nil {
 		return LoginInfo{}, err

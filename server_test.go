@@ -614,11 +614,11 @@ func TestAuthenticationSuccess(t *testing.T) {
 			mainlog.WithError(logOpenError).Errorf("Failed creating a logger for mock conn [%s]", sc.ListenInterface)
 		}
 		conn, server := getMockServerConn(sc, t)
-		Authentication.AddValidator(func(u string, p string) (string, string, error) {
+		Authentication.AddValidator(func(u string, p string) (map[string]interface{}, error) {
 			if u == "helloworld" && p == "helloworld" {
-				return "000000", "aaaaaaaa", nil
+				return map[string]interface{}{"orgID": "000000", "inputID": "aaaaaaaa"}, nil
 			}
-			return "", "", errors.New("fail to perform authentication")
+			return nil, errors.New("fail to perform authentication")
 		})
 		// call the serve.handleClient() func in a goroutine.
 		client := NewClient(conn.Server, 1, mainlog, mail.NewPool(5))
@@ -696,8 +696,8 @@ func TestAuthenticationFailed(t *testing.T) {
 		mainlog.WithError(logOpenError).Errorf("Failed creating a logger for mock conn [%s]", sc.ListenInterface)
 	}
 	conn, server := getMockServerConn(sc, t)
-	Authentication.AddValidator(func(string, string) (string, string, error) {
-		return "", "", errors.New("fail to perform authentication")
+	Authentication.AddValidator(func(string, string) (map[string]interface{}, error) {
+		return nil, errors.New("fail to perform authentication")
 	})
 	// call the serve.handleClient() func in a goroutine.
 	client := NewClient(conn.Server, 1, mainlog, mail.NewPool(5))
@@ -754,11 +754,11 @@ func TestAuthenticationWithUsername(t *testing.T) {
 		mainlog.WithError(logOpenError).Errorf("Failed creating a logger for mock conn [%s]", sc.ListenInterface)
 	}
 	conn, server := getMockServerConn(sc, t)
-	Authentication.AddValidator(func(u string, p string) (string, string, error) {
+	Authentication.AddValidator(func(u string, p string) (map[string]interface{}, error) {
 		if u == "helloworld" && p == "helloworld" {
-			return "000000", "aaaaaaaa", nil
+			return map[string]interface{}{"orgID": "000000", "inputID": "aaaaaaaa"}, nil
 		}
-		return "", "", errors.New("fail to perform authentication")
+		return nil, errors.New("fail to perform authentication")
 	})
 	// call the serve.handleClient() func in a goroutine.
 	client := NewClient(conn.Server, 1, mainlog, mail.NewPool(5))
@@ -818,7 +818,9 @@ func TestCmdBeforeAuthentication(t *testing.T) {
 		mainlog.WithError(logOpenError).Errorf("Failed creating a logger for mock conn [%s]", sc.ListenInterface)
 	}
 	conn, server := getMockServerConn(sc, t)
-	Authentication.AddValidator(func(string, string) (string, string, error) { return "", "", nil })
+	Authentication.AddValidator(func(u string, p string) (map[string]interface{}, error) {
+		return nil, errors.New("fail to perform authentication")
+	})
 	// call the serve.handleClient() func in a goroutine.
 	client := NewClient(conn.Server, 1, mainlog, mail.NewPool(5))
 	var wg sync.WaitGroup

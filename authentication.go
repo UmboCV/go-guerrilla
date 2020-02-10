@@ -23,7 +23,7 @@ type LoginInfo struct {
 	status   bool
 }
 
-type ValidateCallbackFunc func(username string, password string) (orgID string, intputID string, err error)
+type ValidateCallbackFunc func(username string, password string) (map[string]interface{}, error)
 
 var (
 	Authentication = &AuthenticationValidator{
@@ -35,14 +35,14 @@ type AuthenticationValidator struct {
 	handleFunctions ValidateCallbackFunc
 }
 
-func DefaultValidator(username string, password string) (orgID string, intputID string, err error) {
-	return "", "", nil
+func DefaultValidator(username, password string) (map[string]interface{},error) {
+	return nil, nil
 }
 
 func (v *AuthenticationValidator) AddValidator(f ValidateCallbackFunc) {
 	v.handleFunctions = f
 }
 
-func (v *AuthenticationValidator) Validate(a *LoginInfo) (string, string, error) {
+func (v *AuthenticationValidator) Validate(a *LoginInfo) (map[string]interface{}, error) {
 	return v.handleFunctions(a.username, a.password)
 }
