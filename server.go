@@ -351,7 +351,7 @@ func (s *server) isShuttingDown() bool {
 func (s *server) handleClient(client *client) {
 	defer client.closeConn()
 	sc := s.configStore.Load().(ServerConfig)
-	s.log().Infof("Handle client [%s], id: %d", client.RemoteIP, client.ID)
+	s.log().Debugf("Handle client [%s], id: %d", client.RemoteIP, client.ID)
 
 	// Initial greeting
 	greeting := fmt.Sprintf("220 %s SMTP Guerrilla(%s) #%d (%d) %s",
@@ -405,7 +405,7 @@ func (s *server) handleClient(client *client) {
 		input, err := s.readCommand(client)
 		s.log().Debugf("Client sent: %s", input)
 		if err == io.EOF {
-			s.log().WithError(err).Warnf("Client closed the connection: %s", client.RemoteIP)
+			s.log().WithError(err).Debugf("Client closed the connection: %s", client.RemoteIP)
 			return
 		} else if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 			s.log().WithError(err).Warnf("Timeout: %s", client.RemoteIP)
