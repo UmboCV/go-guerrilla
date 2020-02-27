@@ -418,7 +418,7 @@ func (s *server) handleClient(client *client) {
 			client.kill()
 			return
 		} else if err != nil {
-			s.log().WithError(err).Warnf("Read error: %s", client.RemoteIP)
+			s.log().WithError(err).Debugf("Read error: %s", client.RemoteIP)
 			client.kill()
 			return
 		}
