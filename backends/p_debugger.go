@@ -1,9 +1,12 @@
 package backends
 
 import (
-	"github.com/flashmob/go-guerrilla/mail"
+	"github.com/sirupsen/logrus"
+
 	"strings"
 	"time"
+
+	"github.com/flashmob/go-guerrilla/mail"
 )
 
 // ----------------------------------------------------------------------------------
@@ -44,8 +47,20 @@ func Debugger() Decorator {
 		return ProcessWith(func(e *mail.Envelope, task SelectTask) (Result, error) {
 			if task == TaskSaveMail {
 				if config.LogReceivedMails {
-					Log().Infof("Mail from: %s / to: %v", e.MailFrom.String(), e.RcptTo)
-					Log().Info("Headers are:", e.Header)
+
+					// Convert []Address to []string
+					var mailTo []string
+					for _, to := range e.RcptTo {
+						mailTo = append(mailTo, to.String())
+					}
+
+					Log().WithFields(logrus.Fields{
+						"from":    e.MailFrom.String(),
+						"to":      strings.Join(mailTo, ", "),
+						"hello":   e.Helo,
+						"subject": e.Header.Get("Subject"),
+						"date":    e.Header.Get("Date"),
+					}).Info("email log")
 				}
 
 				if config.SleepSec > 0 {
