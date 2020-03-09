@@ -700,11 +700,17 @@ func (s *server) handleAuth(client *client, r response.Responses) (loginInfo Log
 		err = client.sendResponse(s.timeout.Load().(time.Duration), r.FailAuthNotAccepted)
 		return LoginInfo{}, err
 	}
+
+	// Put username and password into Account
+	client.Account.Username = loginInfo.username
+	client.Account.Password = loginInfo.password
+
 	for key, v := range values {
 		if key != "" && v != nil {
 			client.Values[key] = v
 		}
 	}
+
 	loginInfo.status = true
 	err = client.sendResponse(s.timeout.Load().(time.Duration), r.SuccessAuthentication)
 	if err != nil {
@@ -747,6 +753,10 @@ func (s *server) handleAuthWithUsername(
 		err = client.sendResponse(s.timeout.Load().(time.Duration), r.FailAuthNotAccepted)
 		return LoginInfo{}, err
 	}
+
+	// Put username and password into Account
+	client.Account.Username = loginInfo.username
+	client.Account.Password = loginInfo.password
 
 	for key, v := range values {
 		if key != "" && v != nil {

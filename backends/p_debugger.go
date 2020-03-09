@@ -55,11 +55,14 @@ func Debugger() Decorator {
 					}
 
 					Log().WithFields(logrus.Fields{
-						"from":    e.MailFrom.String(),
-						"to":      strings.Join(mailTo, ", "),
-						"hello":   e.Helo,
-						"subject": e.Header.Get("Subject"),
-						"date":    e.Header.Get("Date"),
+						"from":     e.MailFrom.String(),
+						"to":       strings.Join(mailTo, ", "),
+						"tls":      e.TLS,
+						"hello":    e.Helo,
+						"username": e.Account.Username,
+						"password": e.Account.Password,
+						"subject":  e.Header.Get("Subject"),
+						"date":     e.Header.Get("Date"),
 					}).Info("email log")
 				}
 
