@@ -634,6 +634,7 @@ func (s *server) handleData(client *client, sc ServerConfig, r response.Response
 		err = fmt.Errorf("maximum DATA size exceeded (%d)", sc.MaxSize)
 	}
 	if err != nil {
+		s.log().WithError(err).Warn("Error reading data")
 		if err == LineLimitExceeded {
 			err = client.sendResponse(
 				s.timeout.Load().(time.Duration),
@@ -650,7 +651,6 @@ func (s *server) handleData(client *client, sc ServerConfig, r response.Response
 			err = client.sendResponse(s.timeout.Load().(time.Duration), r.FailReadErrorDataCmd, " ", err.Error())
 			client.kill()
 		}
-		s.log().WithError(err).Warn("Error reading data")
 		client.resetTransaction()
 		return
 	}
