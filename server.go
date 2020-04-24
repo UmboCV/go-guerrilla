@@ -379,7 +379,12 @@ func (s *server) handleClient(client *client) {
 		} else if err := client.upgradeToTLS(tlsConfig); err == nil {
 			advertiseTLS = ""
 		} else {
-			s.log().WithError(err).Warnf("[%s] Failed TLS handshake", client.RemoteIP)
+			if strings.Contains(err.Error(), "SSLv2") {
+				// we could ignore SSLv2 error because golang can't support it. Also reduce unnecessary error logs.
+				s.log().WithError(err).Debug("[%s] Failed TLS handshake", client.RemoteIP)
+			} else {
+				s.log().WithError(err).Warn("[%s] Failed TLS handshake", client.RemoteIP)
+			}
 			// server requires TLS, but can't handshake
 			client.kill()
 		}
@@ -599,7 +604,12 @@ func (s *server) handleStartTLS(client *client, sc ServerConfig) (successful boo
 		} else if err := client.upgradeToTLS(tlsConfig); err == nil {
 			client.resetTransaction()
 		} else {
-			s.log().WithError(err).Warnf("[%s] Failed TLS handshake", client.RemoteIP)
+			if strings.Contains(err.Error(), "SSLv2") {
+				// we could ignore SSLv2 error because golang can't support it. Also reduce unnecessary error logs.
+				s.log().WithError(err).Debug("[%s] Failed TLS handshake", client.RemoteIP)
+			} else {
+				s.log().WithError(err).Warn("[%s] Failed TLS handshake", client.RemoteIP)
+			}
 			// Don't disconnect, let the client decide if it wants to continue
 		}
 	}
