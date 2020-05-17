@@ -55,6 +55,7 @@ func Debugger() Decorator {
 					}
 
 					Log().WithFields(logrus.Fields{
+						"emailId":  e.QueuedId,
 						"from":     e.MailFrom.String(),
 						"to":       strings.Join(mailTo, ", "),
 						"tls":      e.TLS,
