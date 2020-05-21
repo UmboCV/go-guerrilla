@@ -63,6 +63,9 @@ type ServerConfig struct {
 	// Extension for smtp which required the login before user send the Mail to server
 	// which base on the rfc4954
 	AuthenticationRequired bool `json:"auth_required"`
+
+	// Enable proxy protocol support so we could get real client IP.
+	ProxyProtocolOn bool `json:"proxy_protocol_on"`
 }
 
 type ServerTLSConfig struct {
@@ -294,6 +297,7 @@ func (c *AppConfig) setDefaults() error {
 		sc.MaxSize = defaultMaxSize
 		c.Servers = append(c.Servers, sc)
 		sc.AuthenticationRequired = false
+		sc.ProxyProtocolOn = false
 	} else {
 		// make sure each server has defaults correctly configured
 		for i := range c.Servers {

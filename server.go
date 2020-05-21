@@ -15,6 +15,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/pires/go-proxyproto"
+
 	"github.com/flashmob/go-guerrilla/backends"
 	"github.com/flashmob/go-guerrilla/log"
 	"github.com/flashmob/go-guerrilla/mail"
@@ -230,6 +232,15 @@ func (s *server) Start(startWG *sync.WaitGroup) error {
 	clientID = 0
 
 	listener, err := net.Listen("tcp", s.listenInterface)
+
+	// Use proxy protocol listener if it is enabled
+	sc := s.configStore.Load().(ServerConfig)
+	if sc.ProxyProtocolOn {
+		listener = &proxyproto.Listener{
+			Listener: listener,
+		}
+	}
+
 	s.listener = listener
 	if err != nil {
 		startWG.Done() // don't wait for me
