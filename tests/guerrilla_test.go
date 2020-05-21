@@ -252,7 +252,7 @@ func TestGreeting(t *testing.T) {
 			t.Error(err)
 			t.FailNow()
 		} else {
-			expected := "220 mail.guerrillamail.com SMTP Guerrilla"
+			expected := "220 mail.guerrillamail.com UMBO SMTP"
 			if strings.Index(greeting, expected) != 0 {
 				t.Error("Server[1] did not have the expected greeting prefix", expected)
 			}
@@ -279,7 +279,7 @@ func TestGreeting(t *testing.T) {
 			t.Error(err)
 			t.FailNow()
 		} else {
-			expected := "220 mail.guerrillamail.com SMTP Guerrilla"
+			expected := "220 mail.guerrillamail.com UMBO SMTP"
 			if strings.Index(greeting, expected) != 0 {
 				t.Error("Server[2] (TLS) did not have the expected greeting prefix", expected)
 			}

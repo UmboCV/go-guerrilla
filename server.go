@@ -354,8 +354,8 @@ func (s *server) handleClient(client *client) {
 	s.log().Debugf("Handle client [%s], id: %d", client.RemoteIP, client.ID)
 
 	// Initial greeting
-	greeting := fmt.Sprintf("220 %s SMTP Guerrilla(%s) #%d (%d) %s",
-		sc.Hostname, Version, client.ID,
+	greeting := fmt.Sprintf("220 %s UMBO SMTP #%d (%d) %s",
+		sc.Hostname, client.ID,
 		s.clientPool.GetActiveClientsCount(), time.Now().Format(time.RFC3339))
 
 	helo := fmt.Sprintf("250 %s Hello", sc.Hostname)
