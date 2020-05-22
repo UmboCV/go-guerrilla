@@ -666,6 +666,7 @@ func (s *server) handleData(client *client, sc ServerConfig, r response.Response
 		return
 	}
 
+	client.Envelope.DataDoneTime = time.Now().UTC()
 	res := s.backend().Process(client.Envelope)
 	if res.Code() < 300 {
 		client.messagesSent++
