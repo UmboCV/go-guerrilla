@@ -105,22 +105,28 @@ type Envelope struct {
 	DeliveryHeader string
 	// Email(s) will be queued with this id
 	QueuedId string
+
 	// Timestamp when the connection is accepted
-	ConnectTime time.Time
-	// Timestamp when the we get all data from client
-	DataDoneTime time.Time
-	// Timestamp when we start for process pipeline
-	ProcessStartTime time.Time
+	ConnectAt time.Time
+	// Timestamp when the authentication starts and ends
+	AuthBeginAt time.Time
+	AuthEndAt   time.Time
+	// Timestamp when the email data starts and ends
+	DataBeginAt time.Time
+	DataEndAt   time.Time
+	// Timestamp when we begin for process pipeline
+	ProcessBeginAt time.Time
+
 	// When locked, it means that the envelope is being processed by the backend
 	sync.Mutex
 }
 
 func NewEnvelope(remoteAddr string, clientID uint64) *Envelope {
 	return &Envelope{
-		RemoteIP:    remoteAddr,
-		Values:      make(map[string]interface{}),
-		QueuedId:    queuedID(clientID),
-		ConnectTime: time.Now().UTC(),
+		RemoteIP:  remoteAddr,
+		Values:    make(map[string]interface{}),
+		QueuedId:  queuedID(clientID),
+		ConnectAt: time.Now().UTC(),
 	}
 }
 
@@ -206,7 +212,7 @@ func (e *Envelope) Reseed(RemoteIP string, clientID uint64) {
 	e.QueuedId = queuedID(clientID)
 	e.Helo = ""
 	e.TLS = false
-	e.ConnectTime = time.Now().UTC()
+	e.ConnectAt = time.Now().UTC()
 }
 
 // PushRcpt adds a recipient email address to the envelope

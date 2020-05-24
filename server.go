@@ -568,6 +568,8 @@ func (s *server) handleClient(client *client) {
 				err = client.sendResponse(s.timeout.Load().(time.Duration), r.FailNoIdentityChangesPermitted)
 				break
 			}
+
+			client.Envelope.AuthBeginAt = time.Now().UTC()
 			cmds := strings.Split(string(input), " ")
 			if len(cmds) > 2 {
 				l, err := s.handleAuthWithUsername(client, cmds[2], r)
@@ -583,6 +585,8 @@ func (s *server) handleClient(client *client) {
 				}
 				loginInfo = l
 			}
+			client.Envelope.AuthEndAt = time.Now().UTC()
+
 		case sc.TLS.StartTLSOn && cmdSTARTTLS.match(cmd):
 			err = client.sendResponse(s.timeout.Load().(time.Duration), r.SuccessStartTLSCmd)
 			if err != nil {
@@ -640,6 +644,8 @@ func (s *server) handleData(client *client, sc ServerConfig, r response.Response
 	// if the client goes a little over. Anything above will err
 	client.bufin.setLimit(int64(sc.MaxSize) + 1024000) // This a hard limit.
 
+	client.Envelope.DataBeginAt = time.Now().UTC()
+
 	n, err := client.Data.ReadFrom(client.smtpReader.DotReader())
 	if n > sc.MaxSize {
 		err = fmt.Errorf("maximum DATA size exceeded (%d)", sc.MaxSize)
@@ -666,7 +672,8 @@ func (s *server) handleData(client *client, sc ServerConfig, r response.Response
 		return
 	}
 
-	client.Envelope.DataDoneTime = time.Now().UTC()
+	client.Envelope.DataEndAt = time.Now().UTC()
+
 	res := s.backend().Process(client.Envelope)
 	if res.Code() < 300 {
 		client.messagesSent++
