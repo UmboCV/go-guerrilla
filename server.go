@@ -416,8 +416,6 @@ func (s *server) handleClient(client *client) {
 		}
 	}
 
-	var cmdLogs []string
-
 	for client.isAlive() {
 		client.bufin.setLimit(CommandLineMaxLength)
 		input, err := s.readCommand(client)
@@ -452,7 +450,7 @@ func (s *server) handleClient(client *client) {
 		cmd := bytes.ToUpper(input[:cmdLen])
 
 		// keep SMTP command logs for debug purpose
-		cmdLogs = append(cmdLogs, strings.Split(string(cmd), " ")[0])
+		client.CmdLogs = append(client.CmdLogs, strings.Split(string(cmd), " ")[0])
 
 		switch {
 		case cmdHELO.match(cmd):
@@ -564,7 +562,6 @@ func (s *server) handleClient(client *client) {
 			if err != nil {
 				break
 			}
-			client.CmdLogs = cmdLogs
 			err = s.handleData(client, sc, r)
 			if err != nil {
 				break
