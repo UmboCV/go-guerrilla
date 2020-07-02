@@ -680,6 +680,13 @@ func (s *server) handleData(client *client, sc ServerConfig, r response.Response
 
 	client.Envelope.DataEndAt = time.Now().UTC()
 
+	// Copy authValues to envelope.Values so that processors could access the authValues.
+	for key, v := range client.authValues {
+		if key != "" && v != nil {
+			client.Values[key] = v
+		}
+	}
+
 	res := s.backend().Process(client.Envelope)
 	if res.Code() < 300 {
 		client.messagesSent++
@@ -736,17 +743,14 @@ func (s *server) handleAuth(client *client, r response.Responses) (loginInfo Log
 		return LoginInfo{}, err
 	}
 
-	// Put username and password into Account
+	// Put username, password and authValues into client
 	client.Account.Username = loginInfo.username
 	client.Account.Password = loginInfo.password
+	client.authValues = values
 
-	for key, v := range values {
-		if key != "" && v != nil {
-			client.Values[key] = v
-		}
-	}
-
+	// Mark login status to true
 	loginInfo.status = true
+
 	err = client.sendResponse(s.timeout.Load().(time.Duration), r.SuccessAuthentication)
 	if err != nil {
 		return LoginInfo{}, err
@@ -789,15 +793,12 @@ func (s *server) handleAuthWithUsername(
 		return LoginInfo{}, err
 	}
 
-	// Put username and password into Account
+	// Put username, password and authValues into client
 	client.Account.Username = loginInfo.username
 	client.Account.Password = loginInfo.password
+	client.authValues = values
 
-	for key, v := range values {
-		if key != "" && v != nil {
-			client.Values[key] = v
-		}
-	}
+	// Mark login status to true
 	loginInfo.status = true
 
 	err = client.sendResponse(s.timeout.Load().(time.Duration), r.SuccessAuthentication)

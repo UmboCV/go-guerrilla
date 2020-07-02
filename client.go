@@ -24,6 +24,8 @@ type client struct {
 	KilledAt    time.Time
 	// Auth login username password reader
 	authReader *textproto.Reader
+	// AuthValues hold the values returned from authentication validator
+	authValues map[string]interface{}
 	// Number of errors encountered during session with this client
 	errors       int
 	messagesSent int
