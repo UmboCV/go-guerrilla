@@ -117,6 +117,9 @@ type Envelope struct {
 	// Timestamp when we begin for process pipeline
 	ProcessBeginAt time.Time
 
+	// SMTP command logs
+	CmdLogs []string
+
 	// When locked, it means that the envelope is being processed by the backend
 	sync.Mutex
 }
@@ -204,6 +207,8 @@ func (e *Envelope) ResetTransaction() {
 	e.Hashes = make([]string, 0)
 	e.DeliveryHeader = ""
 	e.Values = make(map[string]interface{})
+	e.Account = Account{}
+	e.CmdLogs = make([]string, 0)
 }
 
 // Seed is called when used with a new connection, once it's accepted

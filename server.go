@@ -449,6 +449,9 @@ func (s *server) handleClient(client *client) {
 		}
 		cmd := bytes.ToUpper(input[:cmdLen])
 
+		// keep SMTP command logs for debug purpose
+		client.CmdLogs = append(client.CmdLogs, strings.Split(string(cmd), " ")[0])
+
 		switch {
 		case cmdHELO.match(cmd):
 			client.Helo = string(bytes.Trim(input[4:], " "))
