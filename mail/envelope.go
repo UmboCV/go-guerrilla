@@ -207,6 +207,7 @@ func (e *Envelope) ResetTransaction() {
 	e.Hashes = make([]string, 0)
 	e.DeliveryHeader = ""
 	e.Values = make(map[string]interface{})
+	e.CmdLogs = make([]string, 0)
 }
 
 // Seed is called when used with a new connection, once it's accepted
