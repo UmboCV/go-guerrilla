@@ -500,6 +500,7 @@ func (s *server) handleClient(client *client) {
 				err = client.sendResponse(s.timeout.Load().(time.Duration), r.FailNestedMailCmd)
 				break
 			}
+			client.Envelope.MailBeginAt = time.Now().UTC()
 			client.MailFrom, err = client.parsePath([]byte(input[10:]), client.parser.MailFrom)
 			if err != nil {
 				s.log().WithError(err).Error("MAIL parse error", "["+string(input[10:])+"]")
@@ -591,7 +592,6 @@ func (s *server) handleClient(client *client) {
 				}
 				loginInfo = l
 			}
-			client.Envelope.AuthEndAt = time.Now().UTC()
 
 		case sc.TLS.StartTLSOn && cmdSTARTTLS.match(cmd):
 			err = client.sendResponse(s.timeout.Load().(time.Duration), r.SuccessStartTLSCmd)

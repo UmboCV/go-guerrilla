@@ -108,9 +108,10 @@ type Envelope struct {
 
 	// Timestamp when the connection is accepted
 	ConnectAt time.Time
-	// Timestamp when the authentication starts and ends
+	// Timestamp when the authentication starts
 	AuthBeginAt time.Time
-	AuthEndAt   time.Time
+	// Timestamp when the mail transaction starts
+	MailBeginAt time.Time
 	// Timestamp when the email data starts and ends
 	DataBeginAt time.Time
 	DataEndAt   time.Time
@@ -200,6 +201,14 @@ func (e *Envelope) ResetTransaction() {
 	e.RcptTo = []Address{}
 	// reset the data buffer, keep it allocated
 	e.Data.Reset()
+
+	// reset all timestamp
+	e.ConnectAt = time.Time{}
+	e.AuthBeginAt = time.Time{}
+	e.MailBeginAt = time.Time{}
+	e.DataBeginAt = time.Time{}
+	e.DataEndAt = time.Time{}
+	e.ProcessBeginAt = time.Time{}
 
 	// todo: these are probably good candidates for buffers / use sync.Pool (after profiling)
 	e.Subject = ""
