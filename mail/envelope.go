@@ -107,7 +107,9 @@ type Envelope struct {
 	QueuedId string
 
 	// Timestamp when the connection is accepted
-	ConnectAt time.Time
+	ConnectBeginAt time.Time
+	// Timestamp when the greeting starts
+	HelloBeginAt time.Time
 	// Timestamp when the authentication starts
 	AuthBeginAt time.Time
 	// Timestamp when the mail transaction starts
@@ -127,10 +129,9 @@ type Envelope struct {
 
 func NewEnvelope(remoteAddr string, clientID uint64) *Envelope {
 	return &Envelope{
-		RemoteIP:  remoteAddr,
-		Values:    make(map[string]interface{}),
-		QueuedId:  queuedID(clientID),
-		ConnectAt: time.Now().UTC(),
+		RemoteIP: remoteAddr,
+		Values:   make(map[string]interface{}),
+		QueuedId: queuedID(clientID),
 	}
 }
 
@@ -203,7 +204,8 @@ func (e *Envelope) ResetTransaction() {
 	e.Data.Reset()
 
 	// reset all timestamp
-	e.ConnectAt = time.Time{}
+	e.ConnectBeginAt = time.Time{}
+	e.HelloBeginAt = time.Time{}
 	e.AuthBeginAt = time.Time{}
 	e.MailBeginAt = time.Time{}
 	e.DataBeginAt = time.Time{}
@@ -225,7 +227,6 @@ func (e *Envelope) Reseed(RemoteIP string, clientID uint64) {
 	e.QueuedId = queuedID(clientID)
 	e.Helo = ""
 	e.TLS = false
-	e.ConnectAt = time.Now().UTC()
 }
 
 // PushRcpt adds a recipient email address to the envelope

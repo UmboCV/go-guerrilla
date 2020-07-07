@@ -416,6 +416,7 @@ func (s *server) handleClient(client *client) {
 		}
 	}
 
+	var firstMessage = true
 	var cmdLogs []string
 
 	for client.isAlive() {
@@ -458,10 +459,12 @@ func (s *server) handleClient(client *client) {
 		case cmdHELO.match(cmd):
 			client.Helo = string(bytes.Trim(input[4:], " "))
 			client.resetTransaction()
+			client.Envelope.HelloBeginAt = time.Now().UTC()
 			err = client.sendResponse(s.timeout.Load().(time.Duration), helo)
 		case cmdEHLO.match(cmd):
 			client.Helo = string(bytes.Trim(input[4:], " "))
 			client.resetTransaction()
+			client.Envelope.HelloBeginAt = time.Now().UTC()
 			err = client.sendResponse(s.timeout.Load().(time.Duration), ehlo,
 				messageSize,
 				advertiseAuth,
@@ -565,8 +568,14 @@ func (s *server) handleClient(client *client) {
 			if err != nil {
 				break
 			}
+
 			client.CmdLogs = cmdLogs
+			if firstMessage {
+				client.Envelope.ConnectBeginAt = client.ConnectedAt
+			}
+
 			err = s.handleData(client, sc, r)
+			firstMessage = false
 			if err != nil {
 				break
 			}
