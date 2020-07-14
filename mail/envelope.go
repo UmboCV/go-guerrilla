@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"crypto/md5"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -136,7 +137,9 @@ func NewEnvelope(remoteAddr string, clientID uint64) *Envelope {
 }
 
 func queuedID(clientID uint64) string {
-	return fmt.Sprintf("%x", md5.Sum([]byte(string(time.Now().Unix())+string(clientID))))
+	tmp := make([]byte, 8)
+	binary.LittleEndian.PutUint64(tmp, uint64(time.Now().UnixNano())+clientID)
+	return fmt.Sprintf("%x", md5.Sum(tmp))
 }
 
 // ParseHeaders parses the headers into Header field of the Envelope struct.
