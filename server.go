@@ -390,13 +390,8 @@ func (s *server) handleClient(client *client) {
 		} else if err := client.upgradeToTLS(tlsConfig); err == nil {
 			advertiseTLS = ""
 		} else {
-			if strings.Contains(err.Error(), "SSLv2") {
-				// we could ignore SSLv2 error because golang can't support it. Also reduce unnecessary error logs.
-				s.log().WithError(err).Debug("[%s] Failed TLS handshake", client.RemoteIP)
-			} else {
-				s.log().WithError(err).Warn("[%s] Failed TLS handshake", client.RemoteIP)
-			}
 			// server requires TLS, but can't handshake
+			s.log().WithError(err).Debugf("[%s] Failed TLS handshake", client.RemoteIP)
 			client.kill()
 		}
 	}
