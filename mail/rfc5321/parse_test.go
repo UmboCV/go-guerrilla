@@ -60,7 +60,13 @@ func TestParseRcptTo(t *testing.T) {
 		t.Error("error not expected ", err)
 	}
 
-	//
+	err = s.RcptTo([]byte("< Postmaster@example.com>"))
+	if err != nil {
+		t.Error("error not expected ", err)
+	}
+	if s.LocalPart != "Postmaster" {
+		t.Error("s.LocalPart should be: Postmaster")
+	}
 }
 
 func TestParseForwardPath(t *testing.T) {
@@ -542,6 +548,7 @@ func TestParseSubDomain(t *testing.T) {
 	}
 
 }
+
 func TestParse(t *testing.T) {
 
 	s := NewParser([]byte("<"))

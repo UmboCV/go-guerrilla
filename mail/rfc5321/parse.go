@@ -108,7 +108,14 @@ func (s *Parser) forwardPath() (err error) {
 
 //MailFrom accepts the following syntax: Reverse-path [SP Mail-parameters] CRLF
 func (s *Parser) MailFrom(input []byte) (err error) {
-	s.set(input)
+	// We found an invalid address: <  S284@ImmixAlarms.com> which has a space just after he angle bracket
+	// So, the following workaround is to tolerate it by replacing all '< ' to '<'.
+	mailFrom := input
+	if bytes.Contains(input, []byte{'<', ' '}) {
+		mailFrom = bytes.Replace(input, []byte{'<', ' '}, []byte{'<'}, -1)
+	}
+
+	s.set(mailFrom)
 	if err := s.reversePath(); err != nil {
 		return err
 	}
@@ -132,7 +139,14 @@ const postmasterLocalPart = "Postmaster"
 //RcptTo accepts the following syntax: ( "<Postmaster@" Domain ">" / "<Postmaster>" /
 //                  Forward-path ) [SP Rcpt-parameters] CRLF
 func (s *Parser) RcptTo(input []byte) (err error) {
-	s.set(input)
+	// We found an invalid address: <  S284@ImmixAlarms.com> which has a space just after he angle bracket
+	// So, the following workaround is to tolerate it by replacing all '< ' to '<'.
+	rcptTo := input
+	if bytes.Contains(input, []byte{'<', ' '}) {
+		rcptTo = bytes.Replace(input, []byte{'<', ' '}, []byte{'<'}, -1)
+	}
+
+	s.set(rcptTo)
 	if err := s.forwardPath(); err != nil {
 		return err
 	}

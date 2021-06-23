@@ -801,6 +801,26 @@ func TestMailFromCmd(t *testing.T) {
 				t.Error("Server did not respond with", expected, ", it said:"+response)
 			}
 
+			// Tolerate a space after '<'
+			response, err = Command(conn, bufin, "MAIL FROM:< S284@ImmixAlarms.com>")
+			if err != nil {
+				t.Error("command failed", err.Error())
+			}
+			expected = "250 2.1.0 OK"
+			if strings.Index(response, expected) != 0 {
+				t.Error("Server did not respond with", expected, ", it said:"+response)
+			}
+
+			// Reset
+			response, err = Command(conn, bufin, "RSET")
+			if err != nil {
+				t.Error("command failed", err.Error())
+			}
+			expected = "250 2.1.0 OK"
+			if strings.Index(response, expected) != 0 {
+				t.Error("Server did not respond with", expected, ", it said:"+response)
+			}
+
 		}
 		_ = conn.Close()
 		app.Shutdown()
