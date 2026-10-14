@@ -73,3 +73,31 @@ func TestEnvelope(t *testing.T) {
 	}
 
 }
+
+func TestResetTransactionDataCap(t *testing.T) {
+	e := NewEnvelope("127.0.0.1", 1)
+
+	e.Data.Write(make([]byte, 1024))
+	e.ResetTransaction()
+	if e.Data.Len() != 0 || e.Data.Cap() == 0 {
+		t.Errorf("small buffer should be emptied but kept allocated, len=%d cap=%d", e.Data.Len(), e.Data.Cap())
+	}
+
+	e.Data.Write(make([]byte, MaxRetainedDataCap+1))
+	e.ResetTransaction()
+	if e.Data.Len() != 0 || e.Data.Cap() != 0 {
+		t.Errorf("large buffer should be released, len=%d cap=%d", e.Data.Len(), e.Data.Cap())
+	}
+}
+
+func TestPoolReturnDataCap(t *testing.T) {
+	p := NewPool(1)
+	e := p.Borrow("127.0.0.1", 1)
+	e.Data.Write(make([]byte, MaxRetainedDataCap+1))
+	p.Return(e)
+
+	e = p.Borrow("127.0.0.1", 2)
+	if e.Data.Len() != 0 || e.Data.Cap() != 0 {
+		t.Errorf("large buffer should be released on return, len=%d cap=%d", e.Data.Len(), e.Data.Cap())
+	}
+}
