@@ -16,6 +16,11 @@ import (
 	"time"
 )
 
+// MaxRetainedDataCap is the largest data buffer capacity an envelope keeps between transactions.
+// Envelopes are pooled, so without this limit each one would hold on to a buffer as large as
+// the biggest message it has ever received.
+var MaxRetainedDataCap = 16 << 20
+
 // A WordDecoder decodes MIME headers containing RFC 2047 encoded-words.
 // Used by the MimeHeaderDecode function.
 // It's exposed public so that an alternative decoder can be set, eg Gnu iconv
@@ -203,8 +208,7 @@ func (e *Envelope) ResetTransaction() {
 
 	e.MailFrom = Address{}
 	e.RcptTo = []Address{}
-	// reset the data buffer, keep it allocated
-	e.Data.Reset()
+	e.resetData()
 
 	// reset all timestamp
 	e.ConnectBeginAt = time.Time{}
@@ -222,6 +226,15 @@ func (e *Envelope) ResetTransaction() {
 	e.DeliveryHeader = ""
 	e.Values = make(map[string]interface{})
 	e.CmdLogs = make([]string, 0)
+}
+
+// resetData empties the data buffer, keeping it allocated unless it grew past MaxRetainedDataCap
+func (e *Envelope) resetData() {
+	if e.Data.Cap() > MaxRetainedDataCap {
+		e.Data = bytes.Buffer{}
+	} else {
+		e.Data.Reset()
+	}
 }
 
 // Seed is called when used with a new connection, once it's accepted
@@ -326,6 +339,11 @@ func (p *Pool) Borrow(remoteAddr string, clientID uint64) *Envelope {
 // Return returns an envelope back to the envelope pool
 // Make sure that envelope finished processing before calling this
 func (p *Pool) Return(e *Envelope) {
+	// the connection may end without a transaction reset (e.g. a failed write after DATA),
+	// so wait for any backend processing to finish and reset the data buffer here too
+	e.Lock()
+	e.resetData()
+	e.Unlock()
 	select {
 	case p.pool <- e:
 		//placed envelope back in pool
