@@ -38,6 +38,18 @@ const (
 	maxUselessRecords  = 16           // maximum number of consecutive non-advancing records
 )
 
+// defaultMaxRSAKeySize is the maximum RSA key size in bits that we are willing
+// to verify the signatures of during a TLS handshake. Verifying signatures of
+// larger keys is disproportionately expensive and lets a peer force heavy work
+// on us, so we reject them (backported from upstream crypto/tls).
+const defaultMaxRSAKeySize = 8192
+
+// checkKeySize reports whether an RSA public key of n bits is small enough to
+// verify, and the maximum size allowed.
+func checkKeySize(n int) (max int, ok bool) {
+	return defaultMaxRSAKeySize, n <= defaultMaxRSAKeySize
+}
+
 // TLS record types.
 type recordType uint8
 
@@ -778,7 +790,9 @@ func (c *Config) supportedVersions(isClient bool) []uint16 {
 		if isClient && v < VersionTLS10 {
 			continue
 		}
-		// TLS 1.3 is opt-in in Go 1.12.
+		// TLS 1.3 was opt-in via GODEBUG=tls13=1 in Go 1.12. We enable it by
+		// default (isTLS13Supported now returns true), while still allowing it
+		// to be excluded through Config.MaxVersion.
 		if v == VersionTLS13 && !isTLS13Supported() {
 			continue
 		}
@@ -793,11 +807,13 @@ var tls13Support struct {
 	cached bool
 }
 
-// isTLS13Supported returns whether the program opted into TLS 1.3 via
-// GODEBUG=tls13=1. It's cached after the first execution.
+// isTLS13Supported returns whether TLS 1.3 is enabled. Upstream Go 1.12 gated
+// this behind GODEBUG=tls13=1; we enable TLS 1.3 by default. Setting
+// GODEBUG=tls13=0 still turns it off for compatibility with old peers that
+// cannot be upgraded. The result is cached after the first execution.
 func isTLS13Supported() bool {
 	tls13Support.Do(func() {
-		tls13Support.cached = goDebugString("tls13") == "1"
+		tls13Support.cached = goDebugString("tls13") != "0"
 	})
 	return tls13Support.cached
 }

@@ -1790,8 +1790,14 @@ T+E0J8wlH24pgwQHzy7Ko2qLwn1b5PW8ecrlvP1g
 		config.MinVersion = VersionTLS13
 		server := Server(serverConn, config)
 		err := server.Handshake()
-		if !strings.Contains(err.Error(), "key size too small for PSS signature") {
-			t.Errorf(`expected "key size too small for PSS signature", got %q`, err)
+		// The handshake must fail because the RSA key is too small to produce
+		// a PSS signature. The exact wording varies by Go version: older
+		// crypto/tls reported "key size too small for PSS signature", while
+		// newer crypto/rsa reports "message too long for RSA key size".
+		if err == nil ||
+			(!strings.Contains(err.Error(), "key size too small for PSS signature") &&
+				!strings.Contains(err.Error(), "message too long for RSA key size")) {
+			t.Errorf(`expected a key-too-small signing failure, got %q`, err)
 		}
 		close(done)
 	}()
