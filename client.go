@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"net/textproto"
+	"strings"
 	"sync"
 	"time"
 
@@ -41,6 +42,8 @@ type client struct {
 	connGuard sync.Mutex
 	log       log.Logger
 	parser    rfc5321.Parser
+	// tlsHello is what the client offered in its last failed TLS handshake, nil if it never sent a parsable hello
+	tlsHello *tls.ClientHelloInfo
 }
 
 // NewClient allocates a new client.
@@ -178,10 +181,12 @@ func (c *client) getID() uint64 {
 func (c *client) upgradeToTLS(tlsConfig *tls.Config) error {
 	var tlsConn *tls.Conn
 	// wrap c.conn in a new TLS server side connection
-	tlsConn = tls.Server(c.conn, tlsConfig)
+	hc := &helloConn{Conn: c.conn}
+	tlsConn = tls.Server(hc, tlsConfig)
 	// Call handshake here to get any handshake error before reading starts
 	err := tlsConn.Handshake()
 	if err != nil {
+		c.tlsHello = hc.hello
 		return err
 	}
 	// convert tlsConn to net.Conn
@@ -190,6 +195,43 @@ func (c *client) upgradeToTLS(tlsConfig *tls.Config) error {
 	c.bufin.Reset(c.conn)
 	c.TLS = true
 	return err
+}
+
+// helloConn lets the GetConfigForClient hook set in configureSSL record the ClientHello of this connection
+type helloConn struct {
+	net.Conn
+	hello *tls.ClientHelloInfo
+}
+
+func recordClientHello(hello *tls.ClientHelloInfo) (*tls.Config, error) {
+	if hc, ok := hello.Conn.(*helloConn); ok {
+		hc.hello = hello
+	}
+	return nil, nil
+}
+
+// tlsHelloFields describes the cipher suites, curves and versions offered in the last failed TLS handshake
+func (c *client) tlsHelloFields() map[string]interface{} {
+	if c.tlsHello == nil {
+		return nil
+	}
+	curves := make([]uint16, len(c.tlsHello.SupportedCurves))
+	for i, curve := range c.tlsHello.SupportedCurves {
+		curves[i] = uint16(curve)
+	}
+	return map[string]interface{}{
+		"offered_ciphers":  hexIDs(c.tlsHello.CipherSuites),
+		"offered_curves":   hexIDs(curves),
+		"offered_versions": hexIDs(c.tlsHello.SupportedVersions),
+	}
+}
+
+func hexIDs(ids []uint16) string {
+	s := make([]string, len(ids))
+	for i, id := range ids {
+		s[i] = fmt.Sprintf("0x%04x", id)
+	}
+	return strings.Join(s, " ")
 }
 
 func getRemoteAddr(conn net.Conn) string {

@@ -132,6 +132,8 @@ func (s *server) configureSSL() error {
 			Certificates: []tls.Certificate{cert},
 			ClientAuth:   tls.VerifyClientCertIfGiven,
 			ServerName:   sConfig.Hostname,
+			// lets a failed handshake be logged with what the client offered
+			GetConfigForClient: recordClientHello,
 		}
 		if len(sConfig.TLS.Protocols) > 0 {
 			if min, ok := TLSProtocols[sConfig.TLS.Protocols[0]]; ok {
@@ -391,7 +393,7 @@ func (s *server) handleClient(client *client) {
 			advertiseTLS = ""
 		} else {
 			// server requires TLS, but can't handshake
-			s.log().WithError(err).Debugf("[%s] Failed TLS handshake", client.RemoteIP)
+			s.log().WithFields(client.tlsHelloFields()).WithError(err).Debugf("[%s] Failed TLS handshake", client.RemoteIP)
 			client.kill()
 		}
 	}
@@ -631,9 +633,9 @@ func (s *server) handleStartTLS(client *client, sc ServerConfig) (successful boo
 		} else {
 			if strings.Contains(err.Error(), "SSLv2") {
 				// we could ignore SSLv2 error because golang can't support it. Also reduce unnecessary error logs.
-				s.log().WithError(err).Debugf("[%s] Failed TLS handshake", client.RemoteIP)
+				s.log().WithFields(client.tlsHelloFields()).WithError(err).Debugf("[%s] Failed TLS handshake", client.RemoteIP)
 			} else {
-				s.log().WithError(err).Warnf("[%s] Failed TLS handshake", client.RemoteIP)
+				s.log().WithFields(client.tlsHelloFields()).WithError(err).Warnf("[%s] Failed TLS handshake", client.RemoteIP)
 			}
 			// Don't disconnect, let the client decide if it wants to continue
 		}
